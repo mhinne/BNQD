@@ -20,7 +20,7 @@ rc('font', size=12)
 rc('font', family='serif')
 rc('axes', labelsize=10)
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 __author__  = "Max Hinne"
 
 # TODO: 
@@ -33,7 +33,7 @@ __author__  = "Max Hinne"
 # - default plots for 2D applications
 # - optional parameter for end-user: labelfunc, labelLUT or just boundary b; hide switching behaviour
 # - add more options to main analysis object (i.e. share_hyp flag, effect size n MCMC samples, etc.)
-
+# - DISTANGLE summary and effect size calculations, as the latter is slow due to Monte Carlo
 
 
 # Superclass only used as abstract class
@@ -939,7 +939,7 @@ class BnpQedAnalysis():
                 es_range    = summary['es_range']
                 delta       = es_range[1] - es_range[0]
                 es_BMA      = np.sum(es_range*summary['es_BMA']) * delta
-                es_disc     = np.asscalar(summary['f(b)'][0] - summary['f(b)'][1])
+                es_disc     = np.asscalar(summary['f(b)'][1] - summary['f(b)'][0])
                 df.loc[i]   = [kernel_name, logBF, es_disc, es_BMA]
                 
             total_log_bf = self.get_total_log_Bayes_factor()
