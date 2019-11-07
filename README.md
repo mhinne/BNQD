@@ -3,9 +3,9 @@ A Python toolbox for Bayesian Nonparametric Quasi-Experimental Design. Apart fro
 
 ## Examples
 
-* Sicilian 2005 smoking ban
-* French small municipality population thresholds
-* Dutch 2017 parliament elections voting behaviour
+* Sicilian 2005 smoking ban.
+* French small municipality population thresholds.
+* Dutch 2017 parliament elections voting behaviour.
 
 ## Simulations
 
