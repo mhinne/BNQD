@@ -1,16 +1,18 @@
 # BNQD
-A Python toolbox for Bayesian Nonparametric Quasi-Experimental Design.
+A Python toolbox for Bayesian Nonparametric Quasi-Experimental Design. Apart from the main file, this repository contains:
 
 ## Examples
 
-### Sicilian 2005 smoking ban
+* Sicilian 2005 smoking ban
+* French small municipality population thresholds
+* Dutch 2017 parliament elections voting behaviour
 
-This is the most straightforward example, where we apply BNQD with a couple of different kernels to detect an effect on the number of acute coronary events (ACEs) in Sicily, after a smoking ban in public places was instantiated in 2005. 
+## Simulations
 
-### French small municipality population thresholds
+* Regression discontinuity detection with linear or nonlinear true process.
+* Difference-in-differences detection.
+* Smooth transitioning from threshold-based assignment to random assignment.
 
-### Dutch 2017 elections
-
-## Further reading
+## Literature
 
 The preprint that accompanies this repository is available at ...
