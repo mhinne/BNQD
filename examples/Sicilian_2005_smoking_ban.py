@@ -128,5 +128,6 @@ for kernel in kernel_names:
     pred_at_b = [np.squeeze(inv_zscorey(p)) for p in zpred_at_b]
     risk_reduction = 1 - pred_at_b[0] / pred_at_b[1]
     pmd = summ['pmp']['pmd']
+    print(summ['pmp'])
     print('{:s}, risk reduction = {:0.2f}'.format(kernel, risk_reduction*100))
     print('{:s} BMA, risk reduction = {:0.2f}'.format(kernel, pmd*risk_reduction*100))
