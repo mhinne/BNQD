@@ -5,6 +5,8 @@ The de facto standard for causal inference is the randomized controlled trial, w
 
 In this repository, we provide the implementation of a Bayesian non-parametric model-comparison-based take on QED, called BNQD. It quantifies (the presence of) an effect using a Bayes factor and and Bayesian model averaged posterior distribution. For basic usage, see the demo.py script, and for slightly more intricate examples, see the empirical examples and simulations.
 
+The current implementation of BNQD depends on [GPy](https://github.com/SheffieldML/GPy).
+
 ## Literature
 
 * Max Hinne, Marcel van Gerven and Luca Ambrogioni, 2019. Causal inference using Bayesian non-parametric quasi-experimental design. ArXiv: https://arxiv.org/abs/1911.06722.
