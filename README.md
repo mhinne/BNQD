@@ -9,4 +9,4 @@ The current implementation of BNQD depends on [GPflow](https://gpflow.readthedoc
 
 ## Literature
 
-* Max Hinne, Marcel van Gerven and Luca Ambrogioni, 2019. Causal inference using Bayesian non-parametric quasi-experimental design. ArXiv: https://arxiv.org/abs/1911.06722.
+* Max Hinne, Marcel van Gerven and Luca Ambrogioni, 2020. Causal inference using Bayesian non-parametric quasi-experimental design. ArXiv: https://arxiv.org/abs/1911.06722.
