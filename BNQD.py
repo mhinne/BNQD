@@ -28,6 +28,7 @@ from matplotlib import rc
 rc('font',**{'family':'serif','serif':['Palatino']})
 rc('text', usetex=True)
 
+version = '2.0.0'
 
 #plt.rc('font', size=SMALL_SIZE)    # controls default text sizes
 plt.rc('axes', titlesize=30)        # fontsize of the axes title
