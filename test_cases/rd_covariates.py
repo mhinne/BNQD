@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import numpy as np
-from BNQD_v2 import BNQD
+from BNQD import BNQD
 from gpflow.likelihoods import Gaussian, Poisson, StudentT
 from gpflow.kernels import SquaredExponential, Linear, Sum
 
