@@ -7,12 +7,12 @@ In this repository, we provide the implementation of a Bayesian non-parametric m
 
 The current implementation of BNQD was tested using the following dependencies:
 
-* [GPflow](https://gpflow.readthedocs.io/en/master/index.html) 2.0.0
-* tensorflow 2.1.0
-* tensorboard 2.1.1
-* tensorflow_probability 0.9
-* ptable 0.9.2
+* [GPflow](https://gpflow.readthedocs.io/en/master/index.html) 2.1.3
+* tensorflow 2.4.1
 
 ## Literature
 
 * Max Hinne, Marcel van Gerven and Luca Ambrogioni, 2020. Causal inference using Bayesian non-parametric quasi-experimental design. ArXiv: https://arxiv.org/abs/1911.06722.
+* David Leeftink and Max Hinne, 2020. Spectral discontinuity design: Interrupted time series with spectral mixture kernels. Proceedings of the Machine Learning for Health NeurIPS Workshop, in PMLR 136:213-225. Available from http://proceedings.mlr.press/v136/leeftink20a.html.
+
+
