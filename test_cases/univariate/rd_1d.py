@@ -22,6 +22,8 @@ print('TensorFlow version', tf.__version__)
 print('GPflow version    ', gpf.__version__)
 print('BNQD version      ', BNQD.__version__)
 
+# TODO: bug! Visible in linear kernel setting; independent kernel doesn't split correctly?
+
 
 def linear_regression(x, a, b, x0=0.0, d=0):
     return a*x + b + d*(x >= x0)
@@ -29,18 +31,20 @@ def linear_regression(x, a, b, x0=0.0, d=0):
 obs_model = 'g'
 
 print('1D case')
-kernel_list = [Linear(), Exponential(), SquaredExponential(), SpectralMixture(Q=2)]
+# kernel_list = [Linear(), Exponential(), SquaredExponential(), SpectralMixture(Q=2)]
+kernel_list = [Linear(), SquaredExponential()]
 K = len(kernel_list)
 
 n = 50
-x0 = 0.0
+x0 = 0.5
 d = 3.0
 xmin, xmax = -1, 1
-x = np.sort(np.random.uniform(low=xmin, high=xmax, size=n))
-f = linear_regression(x, a=0.9, b=3.2, x0=x0, d=d)
+# x = np.sort(np.random.uniform(low=xmin, high=xmax, size=n))
+x = np.linspace(-1, 1, num=n)
+f = linear_regression(x, a=1.3, b=3.2, x0=x0, d=d)
 
 if obs_model is 'g':
-    sigma = 2.0
+    sigma = 0.2
     y = np.random.normal(loc=f, scale=sigma)
     likelihood = Gaussian()
 elif obs_model is 'p':

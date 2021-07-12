@@ -27,38 +27,128 @@ class IndependentKernel(Combination):
     :param forcing_variable: the dimension of the input X to which the threshold is applied
     """
 
-    def __init__(self, kernels, x0, forcing_variable=0, name=None):
+    # TODO: MIGP implementation
+    # TODO: make split function based on x0 and forcing variable
+    # TODO: use split function to make both kernel components
 
-        self.x0 = x0
-        self.forcing_variable = forcing_variable
+    def __init__(self,
+                 kernels,
+                 x0=None,
+                 forcing_variable=0,
+                 split_function=None,
+                 name=None):
+
+        assert x0 is not None or split_function is not None, 'Provide either a threshold or split function.'
+
+        if split_function is not None:
+            self.split_function = split_function
+        else:
+            self.x0 = x0
+            self.forcing_variable = forcing_variable
+            self.split_function = self.univariate_threshold
+
         super().__init__(kernels, name=name)
 
+    #
+
+    def univariate_threshold(self, X):
+        return tf.dtypes.cast(X[:, self.forcing_variable] >= self.x0, tf.int32)
+
+    #
+    def pre_mask(self, X):
+        return 1 - self.split_function(X)
+
+    def post_mask(self, X):
+        return self.split_function(X)
+
+    # def K(self, X, X2=None):
+    #     """
+    #     Assumes one-dimensional data, with a simple threshold function to determine the kernel to use.
+    #     @param X:
+    #     @param X2:
+    #     @return:
+    #     """
+    #     # threshold X, X2 based on self.x0, and construct a joint tensor
+    #     if X2 is None:
+    #         X2 = X
+    #
+    #     fv = self.forcing_variable
+    #     mask1 = tf.dtypes.cast(X[:, fv] < self.x0, tf.int32)        # all obs x, x' < x0
+    #     mask2 = tf.dtypes.cast(X2[:, fv] >= self.x0, tf.int32)      # all obs x, x' >= x0
+    #
+    #     X_partitioned = tf.dynamic_partition(X, mask1, 2)
+    #     X2_partitioned = tf.dynamic_partition(X2, mask2, 2)
+    #
+    #     K_pre = self.kernels[0].K(X_partitioned[1], X_partitioned[1])
+    #     K_post = self.kernels[1].K(X2_partitioned[1], X2_partitioned[1])
+    #
+    #     zero_block_1 = tf.zeros([tf.shape(K_pre)[0], tf.shape(K_post)[1]], tf.float64)
+    #     zero_block_2 = tf.zeros([tf.shape(K_post)[0], tf.shape(K_pre)[1]], tf.float64)
+    #     upper_row = tf.concat([K_pre, zero_block_1], axis=1)
+    #     lower_row = tf.concat([zero_block_2, K_post], axis=1)
+    #
+    #     return tf.concat([upper_row, lower_row], axis=0)
+
+    ################
+
     def K(self, X, X2=None):
-        # threshold X, X2 based on self.x0, and construct a joint tensor
+        """
+        Multi-dimensional kernel with arbitrary function to determine which kernel to use.
+        @param X:
+        @param X2:
+        @return:
+        """
         if X2 is None:
             X2 = X
+        mask1 = self.pre_mask(X)
+        mask2 = self.post_mask(X2)
 
-        fv = self.forcing_variable
-        mask1 = tf.dtypes.cast(X[:, fv] >= self.x0, tf.int32)
-        mask2 = tf.dtypes.cast(X2[:, fv] >= self.x0, tf.int32)
+        N = tf.shape(X)[0]
+        N2 = tf.shape(X2)[0]
 
+        mask1_2d = tf.dtypes.cast(tf.tensordot(mask1, mask1, axes=0), tf.bool)
+        mask2_2d = tf.dtypes.cast(tf.tensordot(mask2, mask2, axes=0), tf.bool)
+
+        # # Excessive approach with explicit kernel evaluation for all points:
+        # K1 = self.kernels[0].K(X, X2)
+        # K2 = self.kernels[1].K(X, X2)
+        # K = tf.where(mask1_2d, K1, tf.zeros_like(K1))   # set to K1 if in mask 1, 0 otherwise
+        # K = tf.where(mask2_2d, K2, K)                   # set to K2 if in mask 2, no change otherwise
+        # return K
+
+        # The following kernel construction only evaluates the kernel for the relevant pairs and leaves
+        # covariances zero otherwise.
         X_partitioned = tf.dynamic_partition(X, mask1, 2)
         X2_partitioned = tf.dynamic_partition(X2, mask2, 2)
 
-        K_pre = self.kernels[0].K(X_partitioned[0], X2_partitioned[0])
-        K_post = self.kernels[1].K(X_partitioned[1], X2_partitioned[1])
+        K1_partitioned = self.kernels[0].K(X_partitioned[1], X_partitioned[1])
+        K2_partitioned = self.kernels[1].K(X2_partitioned[1], X2_partitioned[1])
 
-        zero_block_1 = tf.zeros([tf.shape(K_pre)[0], tf.shape(K_post)[1]], tf.float64)
-        zero_block_2 = tf.zeros([tf.shape(K_post)[0], tf.shape(K_pre)[1]], tf.float64)
-        upper_row = tf.concat([K_pre, zero_block_1], axis=1)
-        lower_row = tf.concat([zero_block_2, K_post], axis=1)
+        # K_sparse is not strictly speaking a sparse object, but its elements are only updated where needed
+        # instead of evaluating both the pre- and post intervention kernels completely.
+        K_sparse = tf.zeros([N, N2], dtype=tf.float64)
+        indices_from_mask1 = tf.where(mask1_2d)
+        indices_from_mask2 = tf.where(mask2_2d)
 
-        return tf.concat([upper_row, lower_row], axis=0)
+        # Mask shape is [p**2, 2] when calling kernel.K(.,.) directly, but [None, 2] when calling from within the
+        # scipy optimizer. Why?
+        updates1 = tf.reshape(tf.dtypes.cast(K1_partitioned, tf.float64),
+                              shape=tf.shape(indices_from_mask1)[0])
+        updates2 = tf.reshape(tf.dtypes.cast(K2_partitioned, tf.float64),
+                              shape=tf.shape(indices_from_mask2)[0])
+
+        K_sparse = tf.tensor_scatter_nd_add(tensor=K_sparse,
+                                            indices=indices_from_mask1,
+                                            updates=updates1)
+        K_sparse = tf.tensor_scatter_nd_add(tensor=K_sparse,
+                                            indices=indices_from_mask2,
+                                            updates=updates2)
+
+        return K_sparse
 
     #
     def K_diag(self, X):
-        fv = self.forcing_variable
-        mask = tf.dtypes.cast(X[:, fv] >= self.x0, tf.int32)
+        mask = self.split_function(X)
 
         X_partitioned = tf.dynamic_partition(X, mask, 2)
         return tf.concat([self.kernels[0].K_diag(X_partitioned[0]),
@@ -66,6 +156,8 @@ class IndependentKernel(Combination):
                          axis=0)
 
     #
+
+
 #
 
 
@@ -76,11 +168,13 @@ def MultiOutputKernel(base_kernel, output_dim, rank):
     coreg = gpflow.kernels.Coregion(output_dim=output_dim, rank=rank, active_dims=[1])
     return Product([base_kernel, coreg], name='MO_{:s}'.format(base_kernel.name))
 
+
 #
 
 """
 Spectral Mixture kernel by David Leeftink, see https://github.com/DavidLeeftink/Spectral-Discontinuity-Design
 """
+
 
 def SpectralMixture(Q, mixture_weights=None, frequencies=None, lengthscales=None, max_freq=1.0, max_length=1.0,
                     active_dims=None, x=None, y=None, fs=1, q_range=(1, 10)):
@@ -217,4 +311,3 @@ class SpectralMixtureComponent(Kernel):
         dist = -2 * tf.matmul(X, X2, transpose_b=True)
         dist += tf.reshape(Xs, (-1, 1)) + tf.reshape(X2s, (1, -1))
         return dist
-

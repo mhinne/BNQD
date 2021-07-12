@@ -66,6 +66,8 @@ class DiscontinuousModel:
         self.forcing_variable = forcing_variable
         self.likelihood = likelihood
 
+        print(data[0].shape)
+
         if separate_kernels:
             # two kernel objects; i.e. different kernel hyperparameters pre and post x0
             kernel = IndependentKernel([kernel, deepcopy(kernel)],

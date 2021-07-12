@@ -62,8 +62,9 @@ class BNQD():
         else:
             raise NotImplementedError('Data must be a tuple (SOGP) or list (MOGP)')
 
+        print(X.shape)
         self.data = (X, Y)
-        self.data_split = split_data(self.data, self.x0, self.forcing_variable)
+        # self.data_split = split_data(self.data, self.x0, self.forcing_variable)
 
         self.is_trained = False
         self.M0, self.M1 = list(), list()
@@ -114,14 +115,6 @@ class BNQD():
         return predictions
 
     #
-    # def extrapolate_y(self, x_new):
-    #     x_new = x_new.reshape(-1, 1)
-    #     for k in range(len(self.kernels)):
-    #         self.M1[k]
-    #
-    #     return None
-
-    #
     def __get_evidence(self, mode='BIC'):
         self.__check_training_status()
         K = len(self.kernels)
@@ -136,7 +129,7 @@ class BNQD():
 
                 L = self.M1[k].log_marginal_likelihood().numpy()
                 # pre- and post split length of X
-                n = self.data_split[0][0].shape[0] + self.data_split[1][0].shape[0]
+                # n = self.data_split[0][0].shape[0] + self.data_split[1][0].shape[0]
                 p = len(self.M1[k].gpmodel.kernel.trainable_parameters) \
                     + len(self.M1[k].gpmodel.likelihood.trainable_parameters)
 
