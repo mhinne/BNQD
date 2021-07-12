@@ -114,6 +114,7 @@ class IndependentKernel(Combination):
         # K2 = self.kernels[1].K(X, X2)
         # K = tf.where(mask1_2d, K1, tf.zeros_like(K1))   # set to K1 if in mask 1, 0 otherwise
         # K = tf.where(mask2_2d, K2, K)                   # set to K2 if in mask 2, no change otherwise
+        #
         # return K
 
         # The following kernel construction only evaluates the kernel for the relevant pairs and leaves
@@ -130,12 +131,11 @@ class IndependentKernel(Combination):
         indices_from_mask1 = tf.where(mask1_2d)
         indices_from_mask2 = tf.where(mask2_2d)
 
+
         # Mask shape is [p**2, 2] when calling kernel.K(.,.) directly, but [None, 2] when calling from within the
         # scipy optimizer. Why?
-        updates1 = tf.reshape(tf.dtypes.cast(K1_partitioned, tf.float64),
-                              shape=tf.shape(indices_from_mask1)[0])
-        updates2 = tf.reshape(tf.dtypes.cast(K2_partitioned, tf.float64),
-                              shape=tf.shape(indices_from_mask2)[0])
+        updates1 = tf.reshape(K1_partitioned, shape=[-1]) # (N_pre, N_pre) -> (N_pre^2,)
+        updates2 = tf.reshape(K2_partitioned, shape=[-1]) # (N_post, N_post) -> (N_post^2,)
 
         K_sparse = tf.tensor_scatter_nd_add(tensor=K_sparse,
                                             indices=indices_from_mask1,
