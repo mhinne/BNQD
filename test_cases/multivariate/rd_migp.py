@@ -28,7 +28,12 @@ jitter = 1e-6
 
 
 def quarter_circle(X):
-    return tf.dtypes.cast(X[:, 0]**2 + X[:, 1]**2 >= 0.5,
+    """
+    True *within* the quarter circle.
+    @param X:
+    @return:
+    """
+    return tf.dtypes.cast(X[:, 0]**2 + X[:, 1]**2 <= 0.5,
                           tf.int32)
 
 
@@ -42,50 +47,68 @@ def line(X):
 def square(X):
     return tf.dtypes.cast(np.logical_or((X[:, 0] - 0.5) < 0.5, (X[:, 1] - 0.5) < 0.5), tf.int32)
 
+#
+
+# NB: the intervention threshold/function specifies when intervention is applied
+# i.e. tau(x) == 1 iff x >= x0, etc.
 
 print('1D GP')
+x0 = 0.5
 
-kernel = IndependentKernel([SquaredExponential(variance=1.0, lengthscales=0.7),
+kernel = IndependentKernel([SquaredExponential(variance=1.0, lengthscales=0.3),
                             SquaredExponential(variance=1.0, lengthscales=0.05)],
-                           x0=0.5, forcing_variable=0)
+                           x0=x0, forcing_variable=0)
 
 
-n = 50
+n = 100
+
 X = np.linspace(0, 1, n)[:, np.newaxis]
 K = kernel.K(X)
-sigma = 0.1
 
+sigma2 = 0.1
+#
 L = np.linalg.cholesky(K + jitter*np.identity(n))
 z = np.random.normal(size=X.shape[0])
 f = np.dot(L, z)
-y = np.random.normal(loc=f, scale=sigma)
+y = np.random.normal(loc=f, scale=np.sqrt(sigma2))
 
-fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12, 8))
-axes[0].imshow(K)
-axes[0].set_title('Kernel')
-axes[1].plot(X, y, ls='none', marker='o')
-axes[1].axvline(x=0.5, color='k')
-axes[1].set_xlabel('x')
-axes[1].set_ylabel('y')
-axes[1].set_title('GP sample')
-plt.suptitle('1D threshold function')
-plt.show()
+kernel_opt = IndependentKernel([SquaredExponential(variance=1.0, lengthscales=1.0),
+                                SquaredExponential(variance=1.0, lengthscales=1.0)],
+                               x0=x0, forcing_variable=0)
 
 m = gpf.models.GPR(data=(X, y[:, None]),
-                   kernel=kernel)
+                   kernel=kernel_opt)
 opt = gpf.optimizers.Scipy()
 opt.minimize(m.training_loss,
              variables=m.trainable_variables,
              options={'maxiter': 1000})
 
 print_summary(m)
+epsilon = 1e-5
+x_pred = np.linspace(0, 1, 100).reshape(-1, 1)
 
+y_pred, _ = m.predict_y(x_pred)
+
+fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12, 8))
+axes[0].imshow(K)
+axes[0].set_title('True kernel')
+axes[1].plot(X, y, ls='none', marker='o')
+axes[1].plot(x_pred, y_pred, color='r')
+axes[1].axvline(x=x0, color='k')
+axes[1].set_xlabel('x')
+axes[1].set_ylabel('y')
+axes[1].set_title('GP sample')
+plt.suptitle('1D threshold function')
+plt.show()
+
+
+#
 print('2D GP')
 kernel = IndependentKernel([SquaredExponential(variance=1.0, lengthscales=0.7),
                             SquaredExponential(variance=1.0, lengthscales=0.09)],
                            split_function=quarter_circle)
 
-p = 10
+p = 25
 
 U = np.linspace(0, 1, p)
 x1, x2 = np.meshgrid(U, U)
@@ -102,20 +125,33 @@ f = np.reshape(f_vec, [p, p])
 y_vec = np.random.normal(loc=f_vec, scale=sigma)
 y = np.reshape(y_vec, [p, p])
 
-fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12, 8))
-axes[0].imshow(K)
-axes[0].set_title('Kernel')
-axes[1].imshow(f)
-axes[1].set_xlabel('$x_1$')
-axes[1].set_ylabel('$x_2$')
-axes[1].set_title('GP sample')
-plt.suptitle('2D arbitrary split function')
-plt.show()
+kernel_opt = IndependentKernel([SquaredExponential(variance=1.0, lengthscales=1.0),
+                                SquaredExponential(variance=1.0, lengthscales=1.0)],
+                               split_function=quarter_circle)
 
 m = gpf.models.GPR(data=(X, y_vec.reshape(-1, 1)),
-                   kernel=kernel)
+                   kernel=kernel_opt)
 opt = gpf.optimizers.Scipy()
 opt.minimize(m.training_loss,
              variables=m.trainable_variables,
              options={'maxiter': 1000})
 print_summary(m)
+
+U_pred = np.linspace(0, 1, 5)
+x1_pred, x2_pred = np.meshgrid(U_pred, U_pred)
+X_pred = np.vstack([x1_pred.flatten(), x2_pred.flatten()]).T
+
+y_pred, _ = m.predict_y(X_pred)
+
+fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12, 8))
+axes[0].imshow(K)
+axes[0].set_title('Kernel')
+axes[1].imshow(f)
+axes[1].autoscale(False)
+axes[1].scatter(x1_pred.reshape(-1, 1)*(p-1), x2_pred.reshape(-1, 1)*(p-1),
+                c=y_pred, s=100, edgecolors='k', clip_on=False)
+axes[1].set_xlabel('$x_1$')
+axes[1].set_ylabel('$x_2$')
+axes[1].set_title('GP sample')
+plt.suptitle('2D arbitrary split function')
+plt.show()

@@ -9,6 +9,7 @@ from kernels import SpectralMixture
 
 import tensorflow as tf
 import gpflow as gpf
+from gpflow.utilities import print_summary
 from utilities import plot_m0, plot_m1, plot_effect_size
 
 plt.rc('axes', titlesize=24)        # fontsize of the axes title
@@ -65,6 +66,9 @@ qed = BNQD(data=(x, y),
            intervention_pt=x0,
            qed_mode='RD')
 qed.train()
+print('Training complete')
+print_summary(qed.M0[1].gpmodel)
+print_summary(qed.M1[1].gpmodel)
 print(qed.get_results())
 
 fig, axes = plt.subplots(nrows=K,
