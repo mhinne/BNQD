@@ -22,14 +22,13 @@ class IndependentKernel(Combination):
     This is simply a wrapper around a base kernel in which covariances between elements at different sides of a threshold
     x0 (applied to the forcing variable) are set to 0 a priori.
 
-    :param kernels: the base kernels applied to either side of the threshold
+    :param kernels: the base kernels applied to either side of the threshold (note that these can refer to the same
+                    object, as would be typical in RD designs.
     :param x0: the threshold that determines which kernel is used
     :param forcing_variable: the dimension of the input X to which the threshold is applied
+    :param split_function: Alternative to the combination of x0 and forcing_variable. A function of X that determines to
+                           which inputs treatment is applied.
     """
-
-    # TODO: MIGP implementation
-    # TODO: make split function based on x0 and forcing variable
-    # TODO: use split function to make both kernel components
 
     def __init__(self,
                  kernels,
@@ -51,19 +50,15 @@ class IndependentKernel(Combination):
 
     #
     def univariate_threshold(self, X):
+        """
+        Transform a standard threshold and forcing variable (i.e. the dimension to which the threshold is applied) to a
+        splitting function.
+        """
         return tf.dtypes.cast(X[:, self.forcing_variable] >= self.x0, tf.int32)
 
     #
-    def pre_mask(self, X):
-        return 1 - self.split_function(X)
-
-    #
-    def post_mask(self, X):
-        return self.split_function(X)
-
-    #
     def mask(self, X):
-        return self.split_function(X)
+        return tf.dtypes.cast(self.split_function(X), tf.int32)
 
     #
     def K(self, X, X2=None):
@@ -110,23 +105,24 @@ class IndependentKernel(Combination):
                          axis=0)
 
     #
-
-
 #
 
 
-def MultiOutputKernel(base_kernel, output_dim, rank):
-    assert rank <= output_dim, 'Rank must be <= output dimension'
+class MultiOutputKernel(Product):
 
-    # Coregion kernel
-    coreg = gpflow.kernels.Coregion(output_dim=output_dim, rank=rank, active_dims=[1])
-    return Product([base_kernel, coreg], name='MO_{:s}'.format(base_kernel.name))
+    def __init__(self, base_kernel, output_dim, rank):
+        assert rank <= output_dim, 'Rank must be <= output dimension'
 
+        # Coregion kernel
+        coreg = gpflow.kernels.Coregion(output_dim=output_dim, rank=rank, active_dims=[1])
+        super().__init__([base_kernel, coreg], name='MultiOutput_{:s}'.format(base_kernel.name))
+
+        # return Product([base_kernel, coreg], name='MultiOutput_{:s}'.format(base_kernel.name))
 
 #
 
 """
-Spectral Mixture kernel by David Leeftink, see https://github.com/DavidLeeftink/Spectral-Discontinuity-Design
+Spectral Mixture kernel implementation by David Leeftink, see https://github.com/DavidLeeftink/Spectral-Discontinuity-Design
 """
 
 
@@ -160,9 +156,9 @@ def SpectralMixture(Q, mixture_weights=None, frequencies=None, lengthscales=None
 def initialize_from_emp_spec(Q, x, y, fs, plot=False):
     """
     Initializes the Spectral Mixture hyperparameters by fitting a GMM on the empirical spectrum,
-    found by Lombscargle periodogram.
+    found by Lomb-Scargle periodogram.
     Function largely taken from: https://docs.gpytorch.ai/en/v1.1.1/_modules/gpytorch/kernels/spectral_mixture_kernel.html#SpectralMixtureKernel.initialize_from_data_empspect
-    Instead, here the lom-sccargle periodogram is used to fit the GMM to allow analysis of ununiformly sampled data.
+    Instead, here the Lomb-Scargle periodogram is used to fit the GMM to allow analysis of ununiformly sampled data.
 
     :param Q (int) number of spectral components in SM kernel
     :param x (np.array of float64) X values of input data

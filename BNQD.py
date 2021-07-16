@@ -1,22 +1,21 @@
 import numpy as np
-from typing import Union, Optional
+import gpflow as gpf
 
+from typing import Union, Optional
 from prettytable import PrettyTable
 from tqdm import tqdm
 from gpflow.likelihoods import Likelihood, Gaussian
-from gpflow.kernels import Kernel, SeparateIndependent, ChangePoints
+from gpflow.kernels import Kernel
 from gpflow.mean_functions import MeanFunction, Constant
 from gpflow.utilities import deepcopy
 from gpflow.optimizers import Scipy
-
 from models import ContinuousModel, DiscontinuousModel
-from kernels import IndependentKernel
-from utilities import renormalize, augment_input, augment_output, split_data
+from utilities import renormalize
 
 
 class BNQD():
 
-    __version__ = '2.0.1'
+    __version__ = '2.0.2'
 
     def __init__(self,
                  data,
@@ -25,46 +24,55 @@ class BNQD():
                  mean_function: Optional[MeanFunction] = Constant(),
                  intervention_pt=0.0,
                  forcing_variable=0,
-                 qed_mode='RD'):
+                 split_function=None,
+                 qed_mode='RD',
+                 rank=None):
         """
 
         @type likelihood: GPflow Likelihood
         """
 
-        self.likelihood = likelihood
+        # self.likelihood = likelihood
         self.kernels = kern_list if isinstance(kern_list, list) else [kern_list]
         self.mean_function = mean_function
         self.x0 = intervention_pt
         self.forcing_variable = forcing_variable
+        self.split_function = split_function
         self.results = None
 
         if type(data) is tuple:
             X, Y = data
-            X = X.reshape(-1, 1)
-            Y = Y.reshape(-1, 1)
+            X, Y = np.atleast_2d(X).T, np.atleast_2d(Y).T
 
-            if not isinstance(self.likelihood, Gaussian):
+            if not isinstance(likelihood, Gaussian):
                 Y = Y.astype(np.float)
+            p = 1
         elif type(data) is list:
+            # Multi-output GP case
             p = len(data)
             # assume for now that if we have multiple outputs, we have only one input
             X = list()
             Y = list()
             for i in range(p):
                 x, y = data[i]
-                x, y = x.reshape(-1, 1), y.reshape(-1, 1)
+                x, y = np.atleast_2d(x).T, np.atleast_2d(y).T
                 X.append(np.hstack((x, i * np.ones_like(x))))
                 Y.append(np.hstack((y, i * np.ones_like(y))))
             X = np.vstack(X)
             Y = np.vstack(Y)
 
-            # data_split = split_data((X, Y), x0=x0, forcing_variable=0)
+            # Assume same likelihood for each of p outputs
+            likelihood = gpf.likelihoods.SwitchedLikelihood(
+                p*[likelihood]
+            )
+            self.mogp = True
+            self.p = p
+            if rank is None:
+                rank = p
         else:
-            raise NotImplementedError('Data must be a tuple (SOGP) or list (MOGP)')
+            raise NotImplementedError('Data must be a tuple (GP/MIGP) or list (MOGP)')
 
-        print(X.shape)
         self.data = (X, Y)
-        # self.data_split = split_data(self.data, self.x0, self.forcing_variable)
 
         self.is_trained = False
         self.M0, self.M1 = list(), list()
@@ -73,12 +81,15 @@ class BNQD():
         for kernel in self.kernels:
             kern0 = deepcopy(kernel)
             mu0 = deepcopy(mean_function)
-            m0_k = ContinuousModel(data=self.data, kernel=kern0, likelihood=likelihood, mean_function=mu0)
+            m0_k = ContinuousModel(data=self.data, kernel=kern0, likelihood=likelihood, mean_function=mu0,
+                                   multi_output=self.mogp, output_dim=p, rank=rank)
 
             kern1 = deepcopy(kernel)
             mu1 = deepcopy(mean_function)
             m1_k = DiscontinuousModel(data=self.data, kernel=kern1, likelihood=likelihood, mean_function=mu1,
-                                      x0=self.x0, forcing_variable=forcing_variable, separate_kernels=qed_mode == 'ITS')
+                                      x0=self.x0, forcing_variable=forcing_variable, split_function=split_function,
+                                      separate_kernels=qed_mode == 'ITS', multi_output=self.mogp, output_dim=p,
+                                      rank=rank)
 
             self.M0.append(m0_k)
             self.M1.append(m1_k)
@@ -105,7 +116,24 @@ class BNQD():
 
     #
     def predict_y(self, x_new):
-        x_new = x_new.reshape(-1, 1)
+        x_new = np.atleast_2d(x_new).T
+
+        if self.mogp:
+            # x_new = np.hstack([np.tile(x_new.T, self.p).T,
+            #                    np.repeat(np.arange(self.p).T, x_new.shape[0]).reshape(-1, 1)])
+
+            predictions = list()
+            for i in range(self.p):
+                x_new_i = np.hstack([x_new, i*np.ones_like(x_new)])
+                predictions_i = list()
+                for k in range(len(self.kernels)):
+                    mu0_k, var0_k = self.M0[k].predict_y(x_new_i)
+                    mu1_k, var1_k = self.M1[k].predict_y(x_new_i)
+                    predictions_k = ((mu0_k, var0_k), (mu1_k, var1_k))
+                    predictions_i.append(predictions_k)
+                predictions.append(predictions_i)
+            return predictions
+
         predictions = list()
         for k in range(len(self.kernels)):
             mu0_k, var0_k = self.M0[k].predict_y(x_new)
@@ -152,7 +180,10 @@ class BNQD():
 
     #
     def get_bayes_factor(self):
-        return self.__bayes_factor
+        if hasattr(self, '__bayes_factor'):
+            return self.__bayes_factor
+        else:
+            return self.__get_bayes_factor()
 
     #
     def __get_effect_sizes(self, model='all'):

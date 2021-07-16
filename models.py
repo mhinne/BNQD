@@ -4,7 +4,7 @@ from gpflow.mean_functions import MeanFunction
 from gpflow.models import GPModel, GPR, VGP
 from gpflow.utilities import triangular, deepcopy
 
-from kernels import IndependentKernel
+from kernels import IndependentKernel, MultiOutputKernel
 
 
 class ContinuousModel:
@@ -13,8 +13,17 @@ class ContinuousModel:
                  data,
                  kernel: Kernel,
                  likelihood: Likelihood,
-                 mean_function: MeanFunction):
-        if isinstance(likelihood, Gaussian):
+                 mean_function: MeanFunction,
+                 multi_output=False,
+                 output_dim=None,
+                 rank=None):
+
+        if multi_output:
+            assert output_dim is not None and rank is not None, 'Output_dim and rank must be set in multi-output ' \
+                                                                'context.'
+            kernel = MultiOutputKernel(kernel, output_dim=output_dim, rank=rank)
+
+        if isinstance(likelihood, Gaussian) and not isinstance(kernel, MultiOutputKernel):
             self.gpmodel = GPR(data=data,
                                kernel=kernel,
                                mean_function=mean_function)
@@ -61,27 +70,38 @@ class DiscontinuousModel:
                  mean_function: MeanFunction,
                  x0=0.0,
                  forcing_variable=0,
-                 separate_kernels=False):
+                 split_function=None,
+                 separate_kernels=False,
+                 multi_output=False,
+                 output_dim=None,
+                 rank=None):
         self.x0 = x0
         self.forcing_variable = forcing_variable
         self.likelihood = likelihood
-
-        print(data[0].shape)
+        self.split_function = split_function
 
         if separate_kernels:
-            # two kernel objects; i.e. different kernel hyperparameters pre and post x0
-            kernel = IndependentKernel([kernel, deepcopy(kernel)],
+            kernels = [kernel, deepcopy(kernel)]
+        else:
+            kernels = 2*[kernel]
+
+        if split_function is None:
+            kernel = IndependentKernel(kernels,
                                        x0=self.x0,
                                        forcing_variable=self.forcing_variable,
                                        name='{:s}_indep'.format(kernel.name))
         else:
-            # one kernel object; i.e. same kernel parameters pre and post x0
-            kernel = IndependentKernel([kernel, kernel],
-                                       x0=self.x0,
-                                       forcing_variable=self.forcing_variable,
-                                       name='{:s}_disc'.format(kernel.name))
+            kernel = IndependentKernel(kernels,
+                                       split_function=self.split_function,
+                                       name='{:s}_indep'.format(kernel.name))
 
-        if isinstance(self.likelihood, Gaussian):
+        if multi_output:
+            assert output_dim is not None and rank is not None, 'Output_dim and rank must be set in multi-output ' \
+                                                                'context.'
+            kernel = MultiOutputKernel(kernel, output_dim=output_dim, rank=rank)
+
+
+        if isinstance(self.likelihood, Gaussian) and not isinstance(kernel, MultiOutputKernel):
             self.gpmodel = GPR(data=data, kernel=kernel, mean_function=mean_function)
         else:
             self.gpmodel = VGP(data=data, kernel=kernel, likelihood=likelihood, mean_function=mean_function)

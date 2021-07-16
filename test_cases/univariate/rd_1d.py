@@ -9,7 +9,6 @@ from kernels import SpectralMixture
 
 import tensorflow as tf
 import gpflow as gpf
-from gpflow.utilities import print_summary
 from utilities import plot_m0, plot_m1, plot_effect_size
 
 plt.rc('axes', titlesize=24)        # fontsize of the axes title
@@ -23,21 +22,18 @@ print('TensorFlow version', tf.__version__)
 print('GPflow version    ', gpf.__version__)
 print('BNQD version      ', BNQD.__version__)
 
-# TODO: bug! Visible in linear kernel setting; independent kernel doesn't split correctly?
-
-
 def linear_regression(x, a, b, x0=0.0, d=0):
     return a*x + b + d*(x >= x0)
 
 obs_model = 'g'
 
 print('1D case')
-# kernel_list = [Linear(), Exponential(), SquaredExponential(), SpectralMixture(Q=2)]
-kernel_list = [Linear(), SquaredExponential()]
+kernel_list = [Linear(), Exponential(), SquaredExponential(), SpectralMixture(Q=2)]
+# kernel_list = [Linear(), SquaredExponential()]
 K = len(kernel_list)
 
 n = 50
-x0 = 0.5
+x0 = 0.25
 d = 3.0
 xmin, xmax = -1, 1
 # x = np.sort(np.random.uniform(low=xmin, high=xmax, size=n))
@@ -45,7 +41,7 @@ x = np.linspace(-1, 1, num=n)
 f = linear_regression(x, a=1.3, b=3.2, x0=x0, d=d)
 
 if obs_model is 'g':
-    sigma = 0.2
+    sigma = 0.4
     y = np.random.normal(loc=f, scale=sigma)
     likelihood = Gaussian()
 elif obs_model is 'p':
@@ -67,8 +63,6 @@ qed = BNQD(data=(x, y),
            qed_mode='RD')
 qed.train()
 print('Training complete')
-print_summary(qed.M0[1].gpmodel)
-print_summary(qed.M1[1].gpmodel)
 print(qed.get_results())
 
 fig, axes = plt.subplots(nrows=K,
@@ -80,7 +74,7 @@ fig, axes = plt.subplots(nrows=K,
 for i, ax in enumerate(axes[:, [0, 1]].flatten()):
     ax.plot(x, y, 'o', c='k')
     ax.axvline(x=x0, ls=':', c='k', lw=2.0)
-    ax.set_xlim([xmin,xmax])
+    ax.set_xlim([xmin, xmax])
 
 colors = cm.get_cmap('tab10', 10)
 
@@ -112,6 +106,10 @@ for k in range(K):
 for ax in axes[-1, [0, 1]]:
     ax.set_xlabel('x')
 axes[-1, -1].set_xlabel('d')
+
+# manually set correct limits on effect size plots...
+axes[-1, -1].set_xlim([-2, 5])
+axes[-1, -1].set_ylim([0, 0.7])
 
 axes[0, 0].set_title('Continuous')
 axes[0, 1].set_title('Discontinuous')

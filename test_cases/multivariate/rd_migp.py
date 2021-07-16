@@ -1,16 +1,13 @@
 import matplotlib.pyplot as plt
-from matplotlib import cm
 import numpy as np
 from BNQD import BNQD
-from gpflow.likelihoods import Gaussian, Poisson, StudentT
-from gpflow.kernels import SquaredExponential, Linear, Sum, Exponential, White
+from gpflow.kernels import SquaredExponential
 
-from kernels import SpectralMixture, IndependentKernel
+from kernels import IndependentKernel
 
 import tensorflow as tf
 import gpflow as gpf
 from gpflow.utilities import print_summary
-from utilities import plot_m0, plot_m1, plot_effect_size
 
 plt.rc('axes', titlesize=24)        # fontsize of the axes title
 plt.rc('axes', labelsize=18)        # fontsize of the x and y labels
