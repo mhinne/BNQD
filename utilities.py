@@ -19,10 +19,6 @@ def split_data(data, x0, forcing_variable, include_x0=False):
     else:
         return X[ix_pre, :], X[ix_post, :]
 
-
-
-
-
 #
 def augment_input(X, p):
     stackable_arrays = [np.hstack((X[j][:, np.newaxis], j * np.ones((X[j].shape[0], 1)))) for j in range(p)]

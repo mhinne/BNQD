@@ -19,8 +19,8 @@ class BNQD():
 
     def __init__(self,
                  data,
-                 likelihood: Likelihood,
-                 kern_list: Union[Kernel, list],
+                 likelihood: Likelihood = None,
+                 kern_list: Union[Kernel, list] = None,
                  mean_function: Optional[MeanFunction] = Constant(),
                  intervention_pt=0.0,
                  forcing_variable=0,
@@ -33,19 +33,29 @@ class BNQD():
         """
 
         # self.likelihood = likelihood
+        assert kern_list is not None, 'Please provide at least one GP covariance function.'
         self.kernels = kern_list if isinstance(kern_list, list) else [kern_list]
+        if likelihood is None:
+            likelihood = Gaussian()
+
         self.mean_function = mean_function
         self.x0 = intervention_pt
         self.forcing_variable = forcing_variable
         self.split_function = split_function
         self.results = None
+        self.mogp = False
+        self.migp = False
 
         if type(data) is tuple:
             X, Y = data
-            X, Y = np.atleast_2d(X).T, np.atleast_2d(Y).T
-
+            if np.ndim(X) < 2:
+                X = np.atleast_2d(X).T
+            if np.ndim(Y) < 2:
+                Y = np.atleast_2d(Y).T
             if not isinstance(likelihood, Gaussian):
                 Y = Y.astype(np.float)
+
+            self.migp = X.shape[1] > 1
             p = 1
         elif type(data) is list:
             # Multi-output GP case
@@ -116,12 +126,10 @@ class BNQD():
 
     #
     def predict_y(self, x_new):
-        x_new = np.atleast_2d(x_new).T
+        if np.ndim(x_new) < 2:
+            x_new = np.atleast_2d(x_new).T
 
         if self.mogp:
-            # x_new = np.hstack([np.tile(x_new.T, self.p).T,
-            #                    np.repeat(np.arange(self.p).T, x_new.shape[0]).reshape(-1, 1)])
-
             predictions = list()
             for i in range(self.p):
                 x_new_i = np.hstack([x_new, i*np.ones_like(x_new)])
@@ -186,10 +194,8 @@ class BNQD():
             return self.__get_bayes_factor()
 
     #
-    def __get_effect_sizes(self, model='all'):
+    def __get_effect_sizes(self):
         self.__check_training_status()
-        """Switch 'model' to determine effect size given m0, m1, or BMA
-        """
         epsilon = 1e-6
         K = len(self.kernels)
         res = np.zeros((K, 2))
@@ -217,6 +223,63 @@ class BNQD():
         return self.__bma_effect_sizes
 
     #
+    def __get_bma_effect_sizes_mcmc(self, nsamples=50000):
+        K = len(self.kernels)
+        pmp = self.get_model_posterior()
+        es = self.get_effect_sizes()
+
+        self.__es_mcmc = np.zeros((K+1, nsamples))
+
+        for k in range(K):
+            n_1 = int(np.round(nsamples * pmp[k][1]))
+            if n_1 > 0:
+                d_mu, d_var = es[k, :]
+                d_sd = np.sqrt(d_var)
+                self.__es_mcmc[k, 0:n_1] = np.random.normal(loc=d_mu, scale=d_sd, size=n_1)
+    #
+
+    def get_bma_effect_sizes_mcmc(self):
+        return self.__es_mcmc
+
+    #
+
+    def get_total_bma_effect_sizes_mcmc(self, nsamples=50000):
+        renorm_pmp = renormalize(self.get_evidence())
+        es = self.get_effect_sizes()
+        total_prob_d0 = np.sum(renorm_pmp[:, 0])
+        K = len(self.kernels)
+
+        es_total_bma = []
+
+        # samples from models M1
+        for k in range(K):
+            n = int(np.round(nsamples * renorm_pmp[k, 1]))
+            if n > 0:
+                d_mu, d_var = es[k, :]
+                d_sd = np.sqrt(d_var)
+                es_total_bma.extend(np.random.normal(loc=d_mu, scale=d_sd, size=n))
+        # zero samples from models M0
+        es_total_bma.extend(np.zeros(int(np.round(nsamples * total_prob_d0))))
+        return es_total_bma
+    #
+
+    def get_m1_bma_effect_sizes_mcmc(self, nsamples=50000):
+        renorm_pmp = renormalize(self.get_evidence()[:, 0])
+        es = self.get_effect_sizes()
+        K = len(self.kernels)
+
+        es_total_bma_m1 = []
+
+        for k in range(K):
+            n = int(np.round(nsamples * renorm_pmp[k]))
+            if n > 0:
+                d_mu, d_var = es[k, :]
+                d_sd = np.sqrt(d_var)
+                es_total_bma_m1.extend(np.random.normal(loc=d_mu, scale=d_sd, size=n))
+        return es_total_bma_m1
+    #
+
+
     def __get_model_posterior(self):
         self.__check_training_status()
         K = len(self.kernels)
@@ -259,15 +322,6 @@ class BNQD():
         tab.add_column('p(M0 | D)', pmp[:, 0])
         tab.add_column('p(M1 | D)', pmp[:, 1])
 
-        # Effect sizes given M1
-        es_M1 = self.__get_effect_sizes()
-        tab.add_column('E[p(d | D, M1)]', es_M1[:, 0])
-        tab.add_column('V[p(d | D, M1)]', es_M1[:, 1])
-
-        # Effect sizes given BMA (expectation only)
-        es_BMA = self.__get_bma_effect_sizes()
-        tab.add_column('E[p(d | D)]', es_BMA)
-
         # Total BMA results (marginalized over kernels, assuming uniform kernel distribution)
         # BF_BMA = p(D|m1) / p(D|m0) = [\sum_k p(D|k,m1)p(k|m1)] / [\sum_k p(D|k,m0)p(k,m0)]
         # Note that we assume a uniform prior over k given m0, m1, hence we have:
@@ -277,26 +331,44 @@ class BNQD():
         bma_pmp_m0 = 1 / (1 + np.exp(bma_log_bf))
         bma_pmp_m1 = 1 - bma_pmp_m0
 
-        # BMA expectation and variance (easy because this is a GMM
-        p_D_k_m1 = renormalize(evidences[:, 1])
-        bma_m1_d_exp = np.dot(p_D_k_m1, es_M1[:, 0])
-        bma_m1_d_var = np.dot(p_D_k_m1, es_M1[:, 1])
+        if not self.migp:
+            # Effect sizes given M1
+            es_M1 = self.__get_effect_sizes()
+            tab.add_column('E[p(d | D, M1)]', es_M1[:, 0])
+            tab.add_column('V[p(d | D, M1)]', es_M1[:, 1])
 
-        # total BMA expectation
-        es_all = np.zeros((K, 2))
-        es_all[:, 1] = es_M1[:, 0]
-        p_D_k = renormalize(evidences.flatten())
-        bma_es = np.dot(p_D_k, es_all.flatten())
+            # Effect sizes given BMA (expectation only)
+            es_BMA = self.__get_bma_effect_sizes()
+            tab.add_column('E[p(d | D)]', es_BMA)
 
-        tab.add_row(['BMA',
-                     bma_log_bf,
-                     bma_evidence[0],
-                     bma_evidence[1],
-                     bma_pmp_m0,
-                     bma_pmp_m1,
-                     bma_m1_d_exp,
-                     bma_m1_d_var,
-                     bma_es])
+            # BMA expectation and variance (easy because this is a GMM)
+            p_D_k_m1 = renormalize(evidences[:, 1])
+            bma_m1_d_exp = np.dot(p_D_k_m1, es_M1[:, 0])
+            bma_m1_d_var = np.dot(p_D_k_m1, es_M1[:, 1])
+
+            # total BMA expectation
+            es_all = np.zeros((K, 2))
+            es_all[:, 1] = es_M1[:, 0]
+            p_D_k = renormalize(evidences.flatten())
+            bma_es = np.dot(p_D_k, es_all.flatten())
+
+            tab.add_row(['BMA',
+                         bma_log_bf,
+                         bma_evidence[0],
+                         bma_evidence[1],
+                         bma_pmp_m0,
+                         bma_pmp_m1,
+                         bma_m1_d_exp,
+                         bma_m1_d_var,
+                         bma_es])
+        else:
+            tab.add_row(['BMA',
+                         bma_log_bf,
+                         bma_evidence[0],
+                         bma_evidence[1],
+                         bma_pmp_m0,
+                         bma_pmp_m1])
+
 
         # formatting settings
         tab.float_format = '0.3'

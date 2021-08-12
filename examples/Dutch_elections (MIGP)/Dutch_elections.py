@@ -12,7 +12,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from pyproj import Proj, transform
 from read_election_data import read_data, total_vote_count
 from BNQD import BNQD
-from gpflow.kernels import Polynomial, Matern32
+from gpflow.kernels import Polynomial, Matern32, SquaredExponential
 from gpflow.likelihoods import Gaussian
 
 plt.rc('axes', titlesize=24)        # fontsize of the axes title
@@ -22,15 +22,8 @@ plt.rc('ytick', labelsize=12)       # fontsize of the tick labels
 plt.rc('legend', fontsize=20)       # legend fontsize
 plt.rc('figure', titlesize=32)      # fontsize of the figure title
 
-# print('TensorFlow version', tf.__version__)
 print('GPflow version    ', gpf.__version__)
 print('BNQD version      ', BNQD.__version__)
-
-
-# threshold function
-def is_below_border(x, a=0.20, b=395000):
-    l = a*x[:, 0] + b
-    return x[:, 1] <= l
 
 
 def is_below_border_scaled(x, a=0.20, b=395000):
@@ -38,10 +31,12 @@ def is_below_border_scaled(x, a=0.20, b=395000):
     return (x[:, 1] * s[1] + mu[1]) <= l
 
 
+save_output_to_pdf = True
 fn = 'election_data.npz'
 geodata_url = 'https://geodata.nationaalgeoregister.nl/cbsgebiedsindelingen/wfs?request=GetFeature&service=WFS&version=2.0.0&typeName=cbs_gemeente_2017_gegeneraliseerd&outputFormat=json'
 
 if not os.path.isfile(fn):
+    # Collecting these data is a fairly slow process, so we store intermediate results.
     print('Preprocessing data')
 
     vote_data = read_data()
@@ -63,7 +58,6 @@ if not os.path.isfile(fn):
 
     inProj = Proj(init='epsg:4326')  # world coordinates
     outProj = Proj(init='epsg:28992')  # Dutch coordinates
-
     x[:, 0], x[:, 1] = transform(inProj, outProj, X[:, 0], X[:, 1])
 
     # Retrieve data with municipal boundaries from PDOK
@@ -78,7 +72,6 @@ if not os.path.isfile(fn):
                               right_on="Codering_3")
 
     # slow procedure
-
     for municipality in tqdm(municipalities['statnaam']):
 
         record = dict()
@@ -107,17 +100,6 @@ if not os.path.isfile(fn):
                 record['x2'] = centroid.y
         x_test.append(record)
 
-
-    def is_below_border(x, a=0.20, b=395000):
-        l = a*x[:, 0] + b
-        return x[:, 1] <= l
-
-
-    def is_above_border(x, a=0.20, b=391000):
-        l = a*x[:, 0] + b
-        return x[:, 1] >= l
-
-
     x0, x1, y0, y1 = 1000, 300000, 280000, 620000
 
     mu = [(x1+x0)/2, (y1+y0)/2]
@@ -140,8 +122,6 @@ if not os.path.isfile(fn):
         regions.append(x_test[i]['name'])
 
     np.savez(fn, x=x, y=y, xtrain=xtrain, ytrain=ytrain, xtest=xtest, mu=mu, s=s, regions=regions, allow_pickle=True)
-
-
 else:
     print('Formatted data available, loading')
     npz = np.load(fn, allow_pickle=True)
@@ -157,17 +137,17 @@ else:
     regions = npz['regions']
 
 
-kernel_list = [Polynomial(degree=1), Matern32()]
+# NB: a somewhat reasonable initial lengthscale is needed for the Matern
+kernel_list = [Polynomial(degree=1), Matern32(lengthscales=0.01)]
 kernel_names = ['Polynomial ($d=1$)', 'Matern ($\\nu=3/2$)']
 geordd = BNQD(data=(xtrain, ytrain),
               likelihood=Gaussian(),
               kern_list=kernel_list,
               split_function=is_below_border_scaled)
 geordd.train()
-# TODO: Cannot compute effect sizes for N-D RD yet.
-# print(geordd.get_results())
 
-print(geordd.get_bayes_factor())
+# In the MIGP case, we have no standard effect size measure, so we implement that manually below.
+print(geordd.get_results())
 
 
 def pred_to_dataframe(pred):
@@ -179,7 +159,6 @@ def pred_to_dataframe(pred):
     pred_df = pd.DataFrame.from_dict(pred_pop_frac).T
     pred_df.rename(columns={0: 'pop_vote_frac'}, inplace=True)
     return pred_df
-
 #
 
 
@@ -201,23 +180,17 @@ for i, kernel in enumerate(kernel_list):
     ax = axes[i, 0]
     ax.text(0, 1.1 * (y1 + y0) / 2, kernel_names[i], horizontalalignment='center',
             verticalalignment='center', rotation=90, fontsize=36)
-
     cont_pred_df = pred_to_dataframe(geordd.M0[i].predict_y(xtest))
     map_votes = pd.merge(municipal_boundaries, cont_pred_df, left_on='statnaam',
                          right_index=True)
-
     map_votes.plot(ax=ax, column='pop_vote_frac', cmap=cmap, vmin=0.1, vmax=0.65)
     ax.axis('off')
-
     disc_pred_df = pred_to_dataframe(geordd.M1[i].predict_y(xtest))
-
     map_votes = pd.merge(municipal_boundaries, disc_pred_df, left_on='statnaam',
                          right_index=True)
-
     ax = axes[i, 1]
     divider = make_axes_locatable(ax)
     cax = divider.append_axes('right', size='5%', pad=0.1)
-
     map_votes.plot(ax=ax, column='pop_vote_frac', cmap=cmap,
                    vmin=0.1, vmax=0.65, legend=True, cax=cax,
                    legend_kwds={'label': 'Populist vote fraction'})
@@ -227,7 +200,7 @@ axes[0, 0].set_title('Continuous', fontsize=36)
 axes[0, 1].set_title('Discontinuous', fontsize=36)
 
 # plot the observations and the actual border
-ms = 140
+ms = 160
 for ax in fig.axes:
     pts = ax.scatter(x[:, 0], x[:, 1], s=ms, marker='o',
                      c=y, edgecolors='k', cmap=cmap,
@@ -235,5 +208,45 @@ for ax in fig.axes:
     ax.plot(pb_x, pb_y, lw=5, ls='--', c='k', zorder=11)
 
 plt.suptitle('Fraction of votes for populist parties', fontsize=44)
-plt.tight_layout()
+plt.subplots_adjust(wspace=0, hspace=0)
+plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+if save_output_to_pdf:
+    plt.savefig('Dutch_elections_figure.pdf', bbox_inches='tight', pad_inches=0)
+plt.show()
+
+
+x_scaled_b = np.array([(pb_x - mu[0]) / s[0], (pb_y - mu[1]) / s[1]]).T
+xrange = np.arange(0, 100)
+
+pred_pre = geordd.predict_y(x_scaled_b + 1e-6)
+pred_post = geordd.predict_y(x_scaled_b - 1e-6)
+
+fig = plt.figure(figsize=(15, 8))
+ax = plt.gca()
+
+colors = cm.magma(np.linspace(0.5, 0.1, num=K))
+
+for k in range(K):
+    _, pred_m1_pre = pred_pre[k]
+    pred_m1_pre_mu, pred_m1_pre_var = pred_m1_pre
+
+    _, pred_m1_post = pred_post[k]
+    pred_m1_post_mu, pred_m1_post_var = pred_m1_post
+
+    es_m1_mu = pred_m1_post_mu - pred_m1_pre_mu
+    es_m1_var = pred_m1_pre_var + pred_m1_post_var
+    ax.plot(xrange, es_m1_mu, c=colors[k, :], label='{:s} kernel'.format(kernel_names[k]), lw=4.0)
+    ax.fill_between(xrange,
+                    np.squeeze(es_m1_mu + 1.96 * np.sqrt(es_m1_var)),
+                    np.squeeze(es_m1_mu - 1.96 * np.sqrt(es_m1_var)),
+                    color=colors[k, :], alpha=0.3)
+
+ax.axhline(y=0, c='k', ls='--', label='No effect', lw=4)
+ax.set_xlabel('Phantom border (west-east)')
+ax.set_xlim([xrange[0], xrange[-1]])
+ax.set_ylabel('Difference at border')
+plt.suptitle('2D effect size at the phantom border')
+ax.legend(loc='lower left', framealpha=0.95, fancybox=False)
+if save_output_to_pdf:
+    plt.savefig('Dutch_elections_effectsize_figure.pdf', bbox_inches='tight', pad_inches=0)
 plt.show()

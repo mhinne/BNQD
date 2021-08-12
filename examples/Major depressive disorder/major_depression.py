@@ -48,11 +48,15 @@ ad_dosage = df['concentrat']
 phases = df['phase']
 
 colors_phases = cm.get_cmap('tab10', 10)
-phase_labels = ['Baseline', 'Double blind before reduction', 'Double blind during reduction', 'Post medication reduction', 'Post experiment']
+phase_labels = ['Baseline',
+                'Double blind before reduction',
+                'Double blind during reduction',
+                'Post medication reduction',
+                'Post experiment']
 
 mood_items = ['mood_relaxed', 'mood_down', 'mood_irritat', 'mood_satisfi',
-             'mood_lonely', 'mood_anxious', 'mood_enthus', 'mood_suspic',
-             'mood_cheerf', 'mood_guilty', 'mood_doubt', 'mood_strong']
+              'mood_lonely', 'mood_anxious', 'mood_enthus', 'mood_suspic',
+              'mood_cheerf', 'mood_guilty', 'mood_doubt', 'mood_strong']
 
 mood_needs_shift = np.array([0, 1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0])
 

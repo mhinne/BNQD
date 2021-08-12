@@ -1,4 +1,6 @@
 import csv
+
+
 #
 def total_vote_count(data):
     total_votes = {label: data[label]['VVD'] +
@@ -14,6 +16,7 @@ def total_vote_count(data):
                           data[label]['SGP'] +
                           data[label]['FvD'] for label in data.keys()}
     return total_votes
+
 
 #
 def read_data(
