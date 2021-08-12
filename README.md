@@ -7,8 +7,9 @@ In this repository, we provide the implementation of a Bayesian non-parametric m
 
 The current implementation of BNQD was tested using the following dependencies:
 
-* [GPflow](https://gpflow.readthedocs.io/en/master/index.html) 2.1.3
-* tensorflow 2.4.1
+* [GPFlow](https://gpflow.readthedocs.io/en/master/index.html) 2.2.1
+* TensorFlow 2.5.0
+* NumPy 1.20.2
 
 ## Literature
 
