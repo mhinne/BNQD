@@ -19,7 +19,7 @@ from gpflow.kernels import SquaredExponential, \
 
 from gpflow.utilities import print_summary, deepcopy
 from kernels import SpectralMixture
-
+from gpflow.utilities import print_summary
 import tensorflow as tf
 import gpflow as gpf
 from utilities import plot_m0, plot_m1, plot_effect_size, split_data
@@ -43,7 +43,7 @@ def linear_regression(x, a, b, x0=0.0, d=0):
 #
 # stable: p=1, obs={g, p, t}
 
-obs_model = 't'
+obs_model = 'g'
 qed_mode = 'ITS'
 
 print('1D case; {:s} design'.format(qed_mode))
@@ -67,11 +67,11 @@ k1 = Linear()*SquaredExponential(lengthscales=1.0)
 k2 = Linear()*SquaredExponential(lengthscales=0.2)
 k = ChangePoints([k1, k2], locations=[x0], steepness=10)
 
-f = np.random.multivariate_normal(mean=np.zeros((n)), cov=k.K(x[:, None]))
+f = np.random.multivariate_normal(mean=np.zeros(n), cov=k.K(x[:, None]))
 
 
 if obs_model is 'g':
-    sigma = 0.2
+    sigma = 2.0
     y = np.random.normal(loc=f, scale=sigma)
     likelihood = Gaussian()
 elif obs_model is 'p':
@@ -96,7 +96,7 @@ print(qed.get_results())
 
 fig, axes = plt.subplots(nrows=K,
                          ncols=3,
-                         figsize=(14, K*3), sharey=True)
+                         figsize=(14, K*3), sharey='col')
 
 colors = cm.get_cmap('tab10', 10)
 
@@ -130,11 +130,11 @@ for k in range(K):
             ax=axes[k, 2],
             kernel=k,
             plot_opts=dict(color='firebrick', padding=pad))
-    axes[k, 2].plot(x[x >= x0], y[x >= x0], '.', c='k')
+    axes[k, 2].plot(x[x >= x0], y[x >= x0], 'o', c='k', fillstyle='none')
 
 
 for i, ax in enumerate(axes[:, [0, 1]].flatten()):
-    ax.plot(x, y, '.', c='k')
+    ax.plot(x, y, 'o', c='k', fillstyle='none')
     ax.axvline(x=x0, ls=':', c='k', lw=2.0)
     ax.set_xlim([xmin, xmax+pad])
 for ax in axes[:, 2]:

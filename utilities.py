@@ -42,9 +42,19 @@ def renormalize(ns):
     n = len(ns)
     threshold = np.log(epsilon) - np.log(n)
     ds = ns - mx
-    ds[ds < threshold] = 0  # throw out values below precision
+    # line below screws BMA computation and isn't needed when all models have somewhat reasonable evidence
+    # ds[ds < threshold] = 0  # throw out values below precision
     return np.exp(ds) / np.sum(np.exp(ds))
 
+
+def logsumexp(x):
+    c = x.max()
+    return c + np.log(np.sum(np.exp(x - c)))
+
+
+def logmeanexp(x):
+    c = x.max()
+    return c + np.log(np.mean(np.exp(x - c), axis=0))
 
 #
 def plot_m0(bnqd_obj, kernel, pred_range=None, ax=None, hdi=0.95, plot_opts=dict()):
@@ -65,7 +75,8 @@ def plot_m0(bnqd_obj, kernel, pred_range=None, ax=None, hdi=0.95, plot_opts=dict
     ax.plot(x_pred, mu,
             lw=plot_opts.get('linewidth', 2),
             ls=plot_opts.get('linestyle', '-'),
-            c=plot_opts.get('color', 'r'))
+            c=plot_opts.get('color', 'r'),
+            label=plot_opts.get('label', ''))
     if hdi == 0.95:
       intv = 2*np.sqrt(var)
     else:
@@ -94,13 +105,21 @@ def plot_m1(bnqd_obj, kernel, pred_range=None, ax=None, hdi=0.95, show_x0=True, 
         pred_pre = bnqd_obj.M1[kernel].predict_y(x_pred[x_pred < x0, np.newaxis])
         pred_post = bnqd_obj.M1[kernel].predict_y(x_pred[x_pred >= x0, np.newaxis])
 
-        for x, mu, var in zip([x_pred[x_pred < x0], x_pred[x_pred >= x0]],
+        for i, x, mu, var in zip([0, 1], [x_pred[x_pred < x0], x_pred[x_pred >= x0]],
                               [pred_pre[0].numpy().flatten(), pred_post[0].numpy().flatten()],
                               [pred_pre[1].numpy().flatten(), pred_post[1].numpy().flatten()]):
-            ax.plot(x, mu,
-                    lw=plot_opts.get('linewidth', 2),
-                    ls=plot_opts.get('linestyle', '-'),
-                    c=plot_opts.get('color', 'r'))
+            if i == 0:
+                ax.plot(x, mu,
+                        lw=plot_opts.get('linewidth', 2),
+                        ls=plot_opts.get('linestyle', '-'),
+                        c=plot_opts.get('color', 'r'),
+                        label=plot_opts.get('label', ''))
+            else:
+                ax.plot(x, mu,
+                        lw=plot_opts.get('linewidth', 2),
+                        ls=plot_opts.get('linestyle', '-'),
+                        c=plot_opts.get('color', 'r'))
+
             intv = var
             if hdi == 0.95:
                 intv = 2.0*np.sqrt(intv)
@@ -115,7 +134,8 @@ def plot_m1(bnqd_obj, kernel, pred_range=None, ax=None, hdi=0.95, show_x0=True, 
         ax.plot(x, mu,
                 lw=plot_opts.get('linewidth', 2),
                 ls=plot_opts.get('linestyle', '-'),
-                c=plot_opts.get('color', 'r'))
+                c=plot_opts.get('color', 'r'),
+                label=plot_opts.get('label', ''))
         intv = var
         if hdi == 0.95:
             intv = 2.0 * np.sqrt(intv)

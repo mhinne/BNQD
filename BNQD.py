@@ -2,7 +2,7 @@ import numpy as np
 import gpflow as gpf
 
 from typing import Union, Optional
-from prettytable import PrettyTable
+import pandas as pd
 from tqdm import tqdm
 from gpflow.likelihoods import Likelihood, Gaussian
 from gpflow.kernels import Kernel
@@ -10,12 +10,12 @@ from gpflow.mean_functions import MeanFunction, Constant
 from gpflow.utilities import deepcopy
 from gpflow.optimizers import Scipy
 from models import ContinuousModel, DiscontinuousModel
-from utilities import renormalize
+from utilities import renormalize, logmeanexp
 
 
 class BNQD():
 
-    __version__ = '2.0.2'
+    __version__ = '2.0.3'
 
     def __init__(self,
                  data,
@@ -109,7 +109,7 @@ class BNQD():
         assert self.is_trained, 'Model must be trained first'
 
     #
-    def train(self, opt=None, train_opts=None, verbose=False):
+    def train(self, opt=None, train_opts=None, pb=False):
         assert not self.is_trained, 'Model is already trained'
         if opt is None:
             opt = Scipy()
@@ -117,9 +117,9 @@ class BNQD():
         if train_opts is None:
             train_opts = dict()
 
-        for k in tqdm(range(len(self.kernels))):
+        for k in tqdm(range(len(self.kernels)), disable=not pb):
             for m in [self.M0[k], self.M1[k]]:
-                opt_log = opt.minimize(m.objective, m.gpmodel.trainable_variables,
+                opt.minimize(m.objective, m.gpmodel.trainable_variables,
                                        options=dict(maxiter=train_opts.get('max_iter', 10000)))
 
         self.is_trained = True
@@ -196,19 +196,20 @@ class BNQD():
     #
     def __get_effect_sizes(self):
         self.__check_training_status()
-        epsilon = 1e-6
-        K = len(self.kernels)
-        res = np.zeros((K, 2))
-        for k in range(K):
-            preds = self.M1[k].predict_y(np.atleast_2d([self.x0 - epsilon, self.x0 + epsilon]).T)
-            res[k, 0] = preds[0][1] - preds[0][0]
-            res[k, 1] = preds[1][0] + preds[1][1]
-        self.__effect_sizes = res
+        if not hasattr(self, '__effect_sizes'):
+            epsilon = 1e-6
+            K = len(self.kernels)
+            res = np.zeros((K, 2))
+            for k in range(K):
+                preds = self.M1[k].predict_y(np.atleast_2d([self.x0 - epsilon, self.x0 + epsilon]).T)
+                res[k, 0] = preds[0][1] - preds[0][0]
+                res[k, 1] = preds[1][0] + preds[1][1]
+            self.__effect_sizes = res
         return self.__effect_sizes
 
     #
     def get_effect_sizes(self):
-        return self.__effect_sizes
+        return self.__get_effect_sizes()
 
     #
     def __get_bma_effect_sizes(self):
@@ -236,13 +237,15 @@ class BNQD():
                 d_mu, d_var = es[k, :]
                 d_sd = np.sqrt(d_var)
                 self.__es_mcmc[k, 0:n_1] = np.random.normal(loc=d_mu, scale=d_sd, size=n_1)
-    #
 
+    #
     def get_bma_effect_sizes_mcmc(self):
-        return self.__es_mcmc
+        if hasattr(self, '__es_mcmc'):
+            return self.__es_mcmc
+        else:
+            return self.__get_bma_effect_sizes_mcmc()
 
     #
-
     def get_total_bma_effect_sizes_mcmc(self, nsamples=50000):
         renorm_pmp = renormalize(self.get_evidence())
         es = self.get_effect_sizes()
@@ -261,8 +264,8 @@ class BNQD():
         # zero samples from models M0
         es_total_bma.extend(np.zeros(int(np.round(nsamples * total_prob_d0))))
         return es_total_bma
-    #
 
+    #
     def get_m1_bma_effect_sizes_mcmc(self, nsamples=50000):
         renorm_pmp = renormalize(self.get_evidence()[:, 0])
         es = self.get_effect_sizes()
@@ -277,9 +280,8 @@ class BNQD():
                 d_sd = np.sqrt(d_var)
                 es_total_bma_m1.extend(np.random.normal(loc=d_mu, scale=d_sd, size=n))
         return es_total_bma_m1
+
     #
-
-
     def __get_model_posterior(self):
         self.__check_training_status()
         K = len(self.kernels)
@@ -301,32 +303,64 @@ class BNQD():
         pass
 
     #
-    def get_results(self):
-        self.__check_training_status()
-        tab = PrettyTable()
+    def conditional_bma_effectsize(self):
+        log_ml = self.__get_evidence()
+        p_k = renormalize(log_ml[:, 1])
+        es_M1 = self.__get_effect_sizes()
+        return np.dot(p_k, es_M1)
 
-        # List all kernels
-        tab.add_column('Kernel', [k.name.capitalize() for k in self.kernels])
+
+    def marginal_bma_effectsize(self, nsamples=50000):
+        renorm_pmp = renormalize(self.get_evidence())
+        es = self.get_effect_sizes()
+        total_prob_d0 = np.sum(renorm_pmp[:, 0])
+        K = len(self.kernels)
+
+        es_total_bma = []
+
+        # samples from models M1
+        for k in range(K):
+            n = int(np.round(nsamples * renorm_pmp[k, 1]))
+            if n > 0:
+                d_mu, d_var = es[k, :]
+                d_sd = np.sqrt(d_var)
+                es_total_bma.extend(np.random.normal(loc=d_mu, scale=d_sd, size=n))
+        # zero samples from models M0
+        es_total_bma.extend(np.zeros(int(np.round(nsamples * total_prob_d0))))
+        return np.asarray(es_total_bma)
+
+
+    def get_results(self):
+        # Replaced PrettyTable with pandas for easier extraction of results.
+        self.__check_training_status()
+
+        indices = [k.name.capitalize() for k in self.kernels]
+        indices += ['BMA']
+        if not self.migp:
+            data = np.zeros((len(self.kernels)+1, 8))
+        else:
+            data = np.zeros((len(self.kernels) + 1, 5))
 
         # Bayes factors
         log_bf = self.__get_bayes_factor()
-        tab.add_column('log BF', log_bf)
+        data[0:-1, 0] = log_bf
 
         # (approximated) log hyper marginal likelihood
         evidences = self.__get_evidence()
-        tab.add_column('p(D | M0)', evidences[:, 0])
-        tab.add_column('p(D | M1)', evidences[:, 1])
+        data[0:-1, 1] = evidences[:, 0]
+        data[0:-1, 2] = evidences[:, 1]
 
         # Posterior model probability
         pmp = self.__get_model_posterior()
-        tab.add_column('p(M0 | D)', pmp[:, 0])
-        tab.add_column('p(M1 | D)', pmp[:, 1])
+        data[0:-1, 3] = pmp[:, 0]
+        data[0:-1, 4] = pmp[:, 1]
 
         # Total BMA results (marginalized over kernels, assuming uniform kernel distribution)
         # BF_BMA = p(D|m1) / p(D|m0) = [\sum_k p(D|k,m1)p(k|m1)] / [\sum_k p(D|k,m0)p(k,m0)]
         # Note that we assume a uniform prior over k given m0, m1, hence we have:
         K = len(self.kernels)
-        bma_evidence = np.mean(evidences, axis=0)
+
+        bma_evidence = logmeanexp(evidences)
         bma_log_bf = bma_evidence[1] - bma_evidence[0]
         bma_pmp_m0 = 1 / (1 + np.exp(bma_log_bf))
         bma_pmp_m1 = 1 - bma_pmp_m0
@@ -334,48 +368,36 @@ class BNQD():
         if not self.migp:
             # Effect sizes given M1
             es_M1 = self.__get_effect_sizes()
-            tab.add_column('E[p(d | D, M1)]', es_M1[:, 0])
-            tab.add_column('V[p(d | D, M1)]', es_M1[:, 1])
+            data[0:-1, 5] = es_M1[:, 0]
+            data[0:-1, 6] = es_M1[:, 1]
 
             # Effect sizes given BMA (expectation only)
             es_BMA = self.__get_bma_effect_sizes()
-            tab.add_column('E[p(d | D)]', es_BMA)
+            data[0:-1, 7] = es_BMA
 
             # BMA expectation and variance (easy because this is a GMM)
-            p_D_k_m1 = renormalize(evidences[:, 1])
-            bma_m1_d_exp = np.dot(p_D_k_m1, es_M1[:, 0])
-            bma_m1_d_var = np.dot(p_D_k_m1, es_M1[:, 1])
+            bma_m1_d_exp, bma_m1_d_var = self.conditional_bma_effectsize()
 
             # total BMA expectation
             es_all = np.zeros((K, 2))
             es_all[:, 1] = es_M1[:, 0]
             p_D_k = renormalize(evidences.flatten())
             bma_es = np.dot(p_D_k, es_all.flatten())
+            # Note that this is the same as np.mean(self.marginal_bma_effectsize()), but without MC
+            data[-1, :] = [bma_log_bf, bma_evidence[0], bma_evidence[1], bma_pmp_m0, bma_pmp_m1, bma_m1_d_exp,
+                           bma_m1_d_var, bma_es]
 
-            tab.add_row(['BMA',
-                         bma_log_bf,
-                         bma_evidence[0],
-                         bma_evidence[1],
-                         bma_pmp_m0,
-                         bma_pmp_m1,
-                         bma_m1_d_exp,
-                         bma_m1_d_var,
-                         bma_es])
+        if not self.migp:
+            df = pd.DataFrame(data=data,
+                              columns=['log BF', 'p(D | M0)', 'p(D | M1)', 'p(M0 | D)', 'p(M1 | D)', 'E[p(d | D, M1)]',
+                                       'V[p(d | D, M1)]', 'E[p(d | D)]'],
+                              index=indices)
         else:
-            tab.add_row(['BMA',
-                         bma_log_bf,
-                         bma_evidence[0],
-                         bma_evidence[1],
-                         bma_pmp_m0,
-                         bma_pmp_m1])
+            df = pd.DataFrame(data=data,
+                              columns=['log BF', 'p(D | M0)', 'p(D | M1)', 'p(M0 | D)', 'p(M1 | D)'],
+                              index=indices)
 
-
-        # formatting settings
-        tab.float_format = '0.3'
-        tab.align = 'r'
-        tab.align['Kernel'] = 'l'
-
-        return tab
+        return df
 
     #
 #

@@ -73,6 +73,8 @@ def run_frequentist_baseline(x, y, x0=0.0):
     return results, rdd_baseline.fit(), rdd_baseline_opt.fit()
 
 
+save_output_to_pdf = True
+
 # Politics & longevity, preprocessing by Gelman
 
 df = pd.read_csv(r'Gelman_processed_data.csv')
@@ -113,14 +115,14 @@ for k in range(K):
 freq_result, raw_rdd, opt_rdd = run_frequentist_baseline(x, y, cut_point)
 
 
-def abline(ax, a, b, d):
+def abline(ax, a, b, d, lw=2):
     xpred_pre = xpred[xpred < cut_point]
     xpred_post = xpred[xpred >= cut_point]
 
     y_vals_pre = b + a*xpred_pre
     y_vals_post = b + a*xpred_post + d
-    ax.plot(xpred_pre, y_vals_pre, lw=2, c='r')
-    ax.plot(xpred_post, y_vals_post, lw=2, c='r')
+    ax.plot(xpred_pre, y_vals_pre, lw=lw, c='r')
+    ax.plot(xpred_post, y_vals_post, lw=lw, c='r')
 
     # plot fit at x0
     ax.scatter([cut_point, cut_point], [b + a*cut_point, b + a*cut_point + d],
@@ -141,10 +143,38 @@ axes[-1, 1].axvspan(xmin=cut_point-bw, xmax=cut_point+bw, color='lightgrey', alp
 
 axes[-1, 0].set_ylabel('Freq RD')
 axes[-1, 0].set_title('All data', fontsize=12)
-axes[-1, 1].set_title('Optimized bandwidth', fontsize=12)
+axes[-1, 1].set_title('Optimized bandwidth = {:0.2f}'.format(bw), fontsize=12)
 for ax in axes.flatten():
     ax.plot(x, y, 'k.')
     ax.set_xlim([-10, 10])
     ax.axvline(x=cut_point, ls='--', c='k', lw=2)
 
+plt.show()
+
+fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12, 4), sharex=True, sharey=True)
+plot_m0(bndd, kernel=2, pred_range=(-10, 10), ax=axes[0], plot_opts={'color': 'steelblue',
+                                                                     'linewidth': 4,
+                                                                     'label': '$\mathcal{M}_0$'})
+plot_m1(bndd, kernel=2, pred_range=(-10, 10), ax=axes[0], plot_opts={'color': 'indianred',
+                                                                     'linewidth': 4,
+                                                                     'linestyle': (0, (5, 5)),
+                                                                     'label': '$\mathcal{M}_1$'})
+axes[0].set_title('Matérn ($\\nu=3/2$)', fontsize=24)
+axes[0].set_ylabel('Years alive post election', fontsize=22)
+axes[0].legend(fancybox=False, framealpha=0.95, ncol=2, loc='lower center')
+abline(axes[1], a=a_opt, b=b_opt, d=d_opt, lw=4)
+axes[1].axvspan(xmin=cut_point-bw, xmax=cut_point+bw, color='lightgrey', alpha=0.6)
+axes[1].set_title('Linear RD with opt. bw. = {:0.2f}'.format(bw), fontsize=24)
+
+for ax in axes:
+    ax.set_xlabel('Percentile pts', fontsize=22)
+    ax.plot(x, y, 'k.')
+    ax.set_xlim([-10, 10])
+    ax.axvline(x=cut_point, ls='--', c='k', lw=2)
+    ax.set_xticks([-10, -5, 0.0, 5, 10])
+    ax.tick_params(axis='x', labelsize=18)
+axes[0].tick_params(axis='y', labelsize=18)
+plt.tight_layout()
+if save_output_to_pdf:
+    plt.savefig('longevity.pdf', bbox_inches='tight', pad_inches=0)
 plt.show()
