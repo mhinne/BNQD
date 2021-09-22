@@ -26,7 +26,8 @@ class BNQD():
                  forcing_variable=0,
                  split_function=None,
                  qed_mode='RD',
-                 rank=None):
+                 rank=None,
+                 variational_hyperparams=False):
         """
 
         @type likelihood: GPflow Likelihood
@@ -92,14 +93,15 @@ class BNQD():
             kern0 = deepcopy(kernel)
             mu0 = deepcopy(mean_function)
             m0_k = ContinuousModel(data=self.data, kernel=kern0, likelihood=likelihood, mean_function=mu0,
-                                   multi_output=self.mogp, output_dim=p, rank=rank)
+                                   multi_output=self.mogp, output_dim=p, rank=rank,
+                                   variational_hyperparams=variational_hyperparams)
 
             kern1 = deepcopy(kernel)
             mu1 = deepcopy(mean_function)
             m1_k = DiscontinuousModel(data=self.data, kernel=kern1, likelihood=likelihood, mean_function=mu1,
                                       x0=self.x0, forcing_variable=forcing_variable, split_function=split_function,
                                       separate_kernels=qed_mode == 'ITS', multi_output=self.mogp, output_dim=p,
-                                      rank=rank)
+                                      rank=rank, variational_hyperparams=variational_hyperparams)
 
             self.M0.append(m0_k)
             self.M1.append(m1_k)

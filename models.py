@@ -26,18 +26,26 @@ class ContinuousModel:
                  mean_function: MeanFunction,
                  multi_output=False,
                  output_dim=None,
-                 rank=None):
+                 rank=None,
+                 variational_hyperparams=False):
 
         if multi_output:
             assert output_dim is not None and rank is not None, 'Output_dim and rank must be set in multi-output ' \
                                                                 'context.'
             kernel = MultiOutputKernel(kernel, output_dim=output_dim, rank=rank)
-
-        if isinstance(likelihood, Gaussian) and not isinstance(kernel, MultiOutputKernel):
+        if variational_hyperparams:
+            print(f'Using variational approximation for the Bayes factor')
+            self.gpmodel = FullyBayesianGP(data=data,
+                                           kernel=kernel,
+                                           likelihood=likelihood,
+                                           mean_function=mean_function)
+        elif isinstance(likelihood, Gaussian) and not isinstance(kernel, MultiOutputKernel):
+            print(f'Using exact GP regression model')
             self.gpmodel = GPR(data=data,
                                kernel=kernel,
                                mean_function=mean_function)
         else:
+            print(f"Using variational GP model with ML-II hyperparameter optimization")
             self.gpmodel = VGP(data=data,
                                kernel=kernel,
                                likelihood=likelihood,
@@ -84,7 +92,8 @@ class DiscontinuousModel:
                  separate_kernels=False,
                  multi_output=False,
                  output_dim=None,
-                 rank=None):
+                 rank=None,
+                 variational_hyperparams=False):
         self.x0 = x0
         self.forcing_variable = forcing_variable
         self.likelihood = likelihood
@@ -110,7 +119,11 @@ class DiscontinuousModel:
                                                                 'context.'
             kernel = MultiOutputKernel(kernel, output_dim=output_dim, rank=rank)
 
-
+        if variational_hyperparams:
+            self.gpmodel = FullyBayesianGP(data=data,
+                                           kernel=kernel,
+                                           likelihood=likelihood,
+                                           mean_function=mean_function)
         if isinstance(self.likelihood, Gaussian) and not isinstance(kernel, MultiOutputKernel):
             self.gpmodel = GPR(data=data, kernel=kernel, mean_function=mean_function)
         else:
