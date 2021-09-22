@@ -167,26 +167,24 @@ class FullyBayesianGP(VGP):
             likelihood: Likelihood,
             mean_function: Optional[MeanFunction] = None,
             num_latent_gps: Optional[int] = None,
-            hyper_prior_dim = 1,
             full_rank = False):
 
         super().__init__(data, kernel, likelihood, mean_function, num_latent_gps)
 
         # Sparse variational distributions
-        self.hyper_prior_dim = hyper_prior_dim
         self.q_mu = Parameter(np.zeros((self.num_data, self.num_latent_gps)))
         q_sqrt = np.array([np.eye(self.num_data) for _ in range(self.num_latent_gps)])
         self.q_sqrt = Parameter(q_sqrt, transform=triangular())
 
         # Hyperparameter variational distributions (mean field gaussian approximation)
-        hyper_prior_mean = tf.zeros([hyper_prior_dim])
-        hyper_prior_scale = tf.ones([hyper_prior_dim]) if not full_rank else tf.eye(hyper_prior_dim)
+        self.hyper_dim = len(kernel.trainable_parameters)
+        hyper_prior_mean = tf.zeros([self.hyper_dim])
+        hyper_prior_scale = tf.ones([self.hyper_dim]) if not full_rank else tf.eye(self.hyper_dim)
 
         log_hyper_prior = tfp.distributions.Normal(loc=hyper_prior_mean,
                                                    scale=hyper_prior_scale)
 
-
-        #self.log_theta = LogHyperVariationalDist(hyper_dim, log_hyper_prior, self.n, self.data_dim)
+        self.log_theta = LogHyperVariationalDist(self.hyper_dim, log_hyper_prior, self.n, self.data_dim)
 
     def maximum_log_likelihood_objective(self) -> tf.Tensor:
         return self.elbo()
@@ -233,25 +231,25 @@ class FullyBayesianGP(VGP):
         return mu + self.mean_function(Xnew), var
 
 
-# class LogHyperVariationalDist(gpytorch.Module):
-#
-#     def __init__(self, hyper_dim, hyper_prior, n, data_dim):
-#         super().__init__()
-#
-#         self.hyper_dim = hyper_dim
-#         self.hyper_prior = hyper_prior
-#         self.n = n
-#         self.data_dim = data_dim
-#
-#         # Global variational params
-#         self.q_mu = torch.nn.Parameter(torch.randn(hyper_dim))
-#         self.q_log_sigma = torch.nn.Parameter(torch.randn(hyper_dim))
-#         # This will add the KL divergence KL(q(theta) || p(theta)) to the loss
-#         self.register_added_loss_term("theta_kl")
-#
-#     def forward(self):
-#         # Variational distribution over the hyper variable q(x)
-#         q_theta = torch.distributions.Normal(self.q_mu, torch.nn.functional.softplus(self.q_log_sigma))
-#         theta_kl = kl_gaussian_loss_term(q_theta, self.hyper_prior, self.n, self.data_dim)
-#         self.update_added_loss_term('theta_kl', theta_kl)  # Update the KL term
-#         return q_theta.rsample()
+class LogHyperVariationalDist():
+
+    def __init__(self, hyper_dim, hyper_prior, n, data_dim):
+        super().__init__()
+
+        self.hyper_dim = hyper_dim
+        self.hyper_prior = hyper_prior
+        self.n = n
+        self.data_dim = data_dim
+
+        # Global variational params
+        self.q_mu = Parameter(tf.random.normal([hyper_dim]))
+        self.q_log_sigma = Parameter(tf.random.normal([hyper_dim]))
+        # This will add the KL divergence KL(q(theta) || p(theta)) to the loss
+        self.register_added_loss_term("theta_kl")
+
+    def forward(self):
+        # Variational distribution over the hyper variable q(x)
+        q_theta = tfp.distributions.Normal(self.q_mu, torch.nn.functional.softplus(self.q_log_sigma))
+        theta_kl = kl_gaussian_loss_term(q_theta, self.hyper_prior, self.n, self.data_dim)
+        self.update_added_loss_term('theta_kl', theta_kl)  # Update the KL term
+        return q_theta.rsample()
