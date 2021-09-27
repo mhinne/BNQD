@@ -1,20 +1,20 @@
-import numpy as np
-import gpflow as gpf
-
 from typing import Union, Optional
+
+import gpflow as gpf
+import numpy as np
 import pandas as pd
-from tqdm import tqdm
-from gpflow.likelihoods import Likelihood, Gaussian
 from gpflow.kernels import Kernel
+from gpflow.likelihoods import Likelihood, Gaussian
 from gpflow.mean_functions import MeanFunction, Constant
-from gpflow.utilities import deepcopy
 from gpflow.optimizers import Scipy
+from gpflow.utilities import deepcopy
+from tqdm import tqdm
+
 from models import ContinuousModel, DiscontinuousModel
 from utilities import renormalize, logmeanexp
 
 
 class BNQD():
-
     __version__ = '2.0.3'
 
     def __init__(self,
@@ -73,7 +73,7 @@ class BNQD():
 
             # Assume same likelihood for each of p outputs
             likelihood = gpf.likelihoods.SwitchedLikelihood(
-                p*[likelihood]
+                p * [likelihood]
             )
             self.mogp = True
             self.p = p
@@ -110,6 +110,14 @@ class BNQD():
 
     #
     def train(self, opt=None, train_opts=None, pb=False):
+        """
+
+        @param opt: Optimizer to use. Defaults to Scipy(), can be replaced by e.g. a wrapper around Adam for stochastic
+        optimization for large datasets.
+        @param train_opts: Optimization options.
+        @param pb: Show progress bar?
+        @return: Void, sets attributes.
+        """
         assert not self.is_trained, 'Model is already trained'
         if opt is None:
             opt = Scipy()
@@ -120,19 +128,24 @@ class BNQD():
         for k in tqdm(range(len(self.kernels)), disable=not pb):
             for m in [self.M0[k], self.M1[k]]:
                 opt.minimize(m.objective, m.gpmodel.trainable_variables,
-                                       options=dict(maxiter=train_opts.get('max_iter', 10000)))
+                             options=dict(maxiter=train_opts.get('max_iter', 10000)))
 
         self.is_trained = True
 
     #
     def predict_y(self, x_new):
+        """
+
+        @param x_new: Locations of new observations.
+        @return: Predicted responses at x_new, for all kernels and models.
+        """
         if np.ndim(x_new) < 2:
             x_new = np.atleast_2d(x_new).T
 
         if self.mogp:
             predictions = list()
             for i in range(self.p):
-                x_new_i = np.hstack([x_new, i*np.ones_like(x_new)])
+                x_new_i = np.hstack([x_new, i * np.ones_like(x_new)])
                 predictions_i = list()
                 for k in range(len(self.kernels)):
                     mu0_k, var0_k = self.M0[k].predict_y(x_new_i)
@@ -152,6 +165,12 @@ class BNQD():
 
     #
     def __get_evidence(self, mode='BIC'):
+        """
+
+        @param mode: Which approximation to use: BIC or VI.
+        @return: The marginal likelihoods of each model/kernel combination.
+        """
+
         self.__check_training_status()
         K = len(self.kernels)
         evidence = np.zeros((K, 2))
@@ -221,32 +240,45 @@ class BNQD():
 
     #
     def get_bma_effect_sizes(self):
-        return self.__bma_effect_sizes
+        if hasattr(self, '__bma_effect_sizes'):
+            return self.__bma_effect_sizes
+        else:
+            return self.__bma_effect_sizes()
 
     #
-    def __get_bma_effect_sizes_mcmc(self, nsamples=50000):
+    def __get_bma_effect_sizes_mc(self, nsamples=50000):
+        """
+
+        @param nsamples: Number of Monte Carlo samples.
+        @return: Samples from the conditional effect size distributions.
+        """
         K = len(self.kernels)
         pmp = self.get_model_posterior()
         es = self.get_effect_sizes()
 
-        self.__es_mcmc = np.zeros((K+1, nsamples))
+        self.__es_mc = np.zeros((K + 1, nsamples))
 
         for k in range(K):
             n_1 = int(np.round(nsamples * pmp[k][1]))
             if n_1 > 0:
                 d_mu, d_var = es[k, :]
                 d_sd = np.sqrt(d_var)
-                self.__es_mcmc[k, 0:n_1] = np.random.normal(loc=d_mu, scale=d_sd, size=n_1)
+                self.__es_mc[k, 0:n_1] = np.random.normal(loc=d_mu, scale=d_sd, size=n_1)
 
     #
-    def get_bma_effect_sizes_mcmc(self):
-        if hasattr(self, '__es_mcmc'):
-            return self.__es_mcmc
+    def get_bma_effect_sizes_mc(self):
+        if hasattr(self, '__es_mc'):
+            return self.__es_mc
         else:
-            return self.__get_bma_effect_sizes_mcmc()
+            return self.__get_bma_effect_sizes_mc()
 
     #
-    def get_total_bma_effect_sizes_mcmc(self, nsamples=50000):
+    def get_total_bma_effect_sizes_mc(self, nsamples=50000):
+        """
+        
+        @param nsamples: Number of Monte Carlo samples.  
+        @return: Samples from the marginal effect size distribution across kernels and models.
+        """
         renorm_pmp = renormalize(self.get_evidence())
         es = self.get_effect_sizes()
         total_prob_d0 = np.sum(renorm_pmp[:, 0])
@@ -266,7 +298,14 @@ class BNQD():
         return es_total_bma
 
     #
-    def get_m1_bma_effect_sizes_mcmc(self, nsamples=50000):
+    def get_m1_bma_effect_sizes_mc(self, nsamples=50000):
+        """
+        
+        @param nsamples: Number of Monte Carlo samples 
+        @return: Samples from all conditional effect size models. Note that the expectation of this distribution is 
+        analytical; only use this function for explicit plotting of the density, otherwise use 
+        self.conditional_bma_effectsize().
+        """
         renorm_pmp = renormalize(self.get_evidence()[:, 0])
         es = self.get_effect_sizes()
         K = len(self.kernels)
@@ -295,22 +334,36 @@ class BNQD():
 
     #
     def get_model_posterior(self):
-        return self.__model_posterior
-
-    #
-    def __marginal_likelihoods(self):
-        self.__check_training_status()
-        pass
+        """
+        
+        @return: 2D array of posterior model probabilities, normalized per row (= kernel). 
+        """
+        
+        if hasattr(self, '__model_posterior'):
+            return self.__model_posterior
+        else:
+            return self.__model_posterior()
 
     #
     def conditional_bma_effectsize(self):
+        """
+
+        @return: Model-averaged effect size estimate over all considered kernels (i.e. conditioned on M1, but not
+        conditioned on kernel).
+        """
+
         log_ml = self.__get_evidence()
         p_k = renormalize(log_ml[:, 1])
         es_M1 = self.__get_effect_sizes()
         return np.dot(p_k, es_M1)
 
-
+    #
     def marginal_bma_effectsize(self, nsamples=50000):
+        """
+
+        @param nsamples: number of Monte Carlo samples to base effect size density on.
+        @return: Returns a set of samples of effect sizes given all models, weighted by the posterior model probabilties.
+        """
         renorm_pmp = renormalize(self.get_evidence())
         es = self.get_effect_sizes()
         total_prob_d0 = np.sum(renorm_pmp[:, 0])
@@ -329,15 +382,18 @@ class BNQD():
         es_total_bma.extend(np.zeros(int(np.round(nsamples * total_prob_d0))))
         return np.asarray(es_total_bma)
 
-
+    #
     def get_results(self):
-        # Replaced PrettyTable with pandas for easier extraction of results.
+        """
+        @return: Returns a pandas dataframe containing log Bayes factor, marginal likelihoods, posterior model
+        probabilities, and conditional and marginal effect size estimates.
+        """
         self.__check_training_status()
 
         indices = [k.name.capitalize() for k in self.kernels]
         indices += ['BMA']
         if not self.migp:
-            data = np.zeros((len(self.kernels)+1, 8))
+            data = np.zeros((len(self.kernels) + 1, 8))
         else:
             data = np.zeros((len(self.kernels) + 1, 5))
 
@@ -386,6 +442,8 @@ class BNQD():
             # Note that this is the same as np.mean(self.marginal_bma_effectsize()), but without MC
             data[-1, :] = [bma_log_bf, bma_evidence[0], bma_evidence[1], bma_pmp_m0, bma_pmp_m1, bma_m1_d_exp,
                            bma_m1_d_var, bma_es]
+        else:
+            data[-1, :] = [bma_log_bf, bma_evidence[0], bma_evidence[1], bma_pmp_m0, bma_pmp_m1]
 
         if not self.migp:
             df = pd.DataFrame(data=data,

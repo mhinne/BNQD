@@ -237,14 +237,14 @@ for k in range(K):
     es_m1_var = pred_m1_pre_var + pred_m1_post_var
     ax.plot(xrange, es_m1_mu, c=colors[k, :], label='{:s} kernel'.format(kernel_names[k]), lw=4.0)
     ax.fill_between(xrange,
-                    np.squeeze(es_m1_mu + 1.96 * np.sqrt(es_m1_var)),
-                    np.squeeze(es_m1_mu - 1.96 * np.sqrt(es_m1_var)),
+                    np.squeeze(es_m1_mu + 0.5 * np.sqrt(es_m1_var)),
+                    np.squeeze(es_m1_mu - 0.5 * np.sqrt(es_m1_var)),
                     color=colors[k, :], alpha=0.3)
 
 ax.axhline(y=0, c='k', ls='--', label='No effect', lw=4)
 ax.set_xlabel('Phantom border (west-east)')
 ax.set_xlim([xrange[0], xrange[-1]])
-ax.set_ylabel('Difference at border')
+ax.set_ylabel('Effect size')
 plt.suptitle('2D effect size at the phantom border')
 ax.legend(loc='lower left', framealpha=0.95, fancybox=False)
 if save_output_to_pdf:
