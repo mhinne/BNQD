@@ -121,6 +121,7 @@ class BNQD():
 
         for k in tqdm(range(len(self.kernels))):
             for m in [self.M0[k], self.M1[k]]:
+
                 opt_log = opt.minimize(m.objective, m.gpmodel.trainable_variables,
                                        options=dict(maxiter=train_opts.get('max_iter', 10000)))
 

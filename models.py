@@ -3,7 +3,7 @@ from gpflow.kernels import Kernel
 from gpflow.mean_functions import MeanFunction
 from gpflow.models import GPModel, GPR, VGP
 from gpflow.models.model import InputData, MeanAndVariance, RegressionData
-from gpflow.utilities import triangular, deepcopy
+from gpflow.utilities import triangular, deepcopy, positive
 from gpflow.kullback_leiblers import gauss_kl
 from gpflow.models.util import data_input_to_tensor, inducingpoint_wrapper
 from gpflow.conditionals import conditional
@@ -178,13 +178,16 @@ class FullyBayesianGP(VGP):
 
         # Hyperparameter variational distributions (mean field gaussian approximation)
         self.hyper_dim = len(kernel.trainable_parameters)
-        hyper_prior_mean = tf.zeros([self.hyper_dim])
-        hyper_prior_scale = tf.ones([self.hyper_dim]) if not full_rank else tf.eye(self.hyper_dim)
+        self.hyper_prior_mean = tf.zeros([self.hyper_dim])
+        self.hyper_prior_scale = tf.ones([self.hyper_dim]) if not full_rank else tf.eye(self.hyper_dim)
+        self.log_hyper_prior = tfp.distributions.Normal(loc=self.hyper_prior_mean,
+                                                   scale=self.hyper_prior_scale)
+        self.q_mu_hyper = Parameter(np.ones((self.num_data, self.hyper_dim)))
+        self.q_sqrt_hyper = Parameter(np.ones([self.hyper_dim]), transform=positive())
 
-        log_hyper_prior = tfp.distributions.Normal(loc=hyper_prior_mean,
-                                                   scale=hyper_prior_scale)
+        self.log_theta = tfp.distributions.Normal(loc=tf.ones(self.hyper_dim),
+                                                  scale=tf.ones(self.hyper_dim))
 
-        self.log_theta = LogHyperVariationalDist(self.hyper_dim, log_hyper_prior, self.n, self.data_dim)
 
     def maximum_log_likelihood_objective(self) -> tf.Tensor:
         return self.elbo()
@@ -202,8 +205,16 @@ class FullyBayesianGP(VGP):
 
         """
         X_data, Y_data = self.data
+
         # Get prior KL.
-        KL = gauss_kl(self.q_mu, self.q_sqrt)
+        print(self.q_mu, self.q_sqrt)
+        # print(self.q_mu_hyper, self.q_sqrt_hyper)
+        sparse_prior_KL = gauss_kl(self.q_mu, self.q_sqrt)
+        hyper_prior_KL = tfp.distributions.kl.kl_divergence(self.log_theta, self.log_hyper_prior)
+        print(hyper_prior_KL)
+        assert 1==2
+
+        KL = sparse_prior_KL + hyper_prior_KL # or should this be a minus sign?
 
         # Get conditionals
         K = self.kernel(X_data) + tf.eye(self.num_data, dtype=default_float()) * default_jitter()
@@ -217,6 +228,8 @@ class FullyBayesianGP(VGP):
         fvar = tf.transpose(fvar)
 
         # Get variational expectations.
+        print(f'fmean, fvar, Y-data shapes: {fmean.shape} , {fvar.shape}, {Y_data.shape}')
+
         var_exp = self.likelihood.variational_expectations(fmean, fvar, Y_data)
 
         return tf.reduce_sum(var_exp) - KL
@@ -225,31 +238,15 @@ class FullyBayesianGP(VGP):
                   full_cov: bool = False,
                   full_output_cov: bool = False) -> MeanAndVariance:
         X_data, _ = self.data
+        #log_hyper_sample = self.get_log_theta_sample(n_samples=1)
+        #tf.print(f'log hyper sample shape: {log_hyper_sample.shape}, value: {log_hyper_sample}')
+        #for i, log_hyper_param in enumerate(log_hyper_sample):
+        #    self.kernel.trainable_parameters[i]= tf.exp(log_hyper_sample)
+
         mu, var = conditional(
             Xnew, X_data, self.kernel, self.q_mu, q_sqrt=self.q_sqrt, full_cov=full_cov, white=True,
         )
         return mu + self.mean_function(Xnew), var
 
-
-class LogHyperVariationalDist():
-
-    def __init__(self, hyper_dim, hyper_prior, n, data_dim):
-        super().__init__()
-
-        self.hyper_dim = hyper_dim
-        self.hyper_prior = hyper_prior
-        self.n = n
-        self.data_dim = data_dim
-
-        # Global variational params
-        self.q_mu = Parameter(tf.random.normal([hyper_dim]))
-        self.q_log_sigma = Parameter(tf.random.normal([hyper_dim]))
-        # This will add the KL divergence KL(q(theta) || p(theta)) to the loss
-        self.register_added_loss_term("theta_kl")
-
-    def forward(self):
-        # Variational distribution over the hyper variable q(x)
-        q_theta = tfp.distributions.Normal(self.q_mu, torch.nn.functional.softplus(self.q_log_sigma))
-        theta_kl = kl_gaussian_loss_term(q_theta, self.hyper_prior, self.n, self.data_dim)
-        self.update_added_loss_term('theta_kl', theta_kl)  # Update the KL term
-        return q_theta.rsample()
+    def get_log_theta_sample(self, n_samples=1):
+        return self.log_theta.sample([n_samples])
