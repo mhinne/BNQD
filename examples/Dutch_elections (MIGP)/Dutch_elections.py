@@ -16,11 +16,17 @@ from gpflow.kernels import Polynomial, Matern32, SquaredExponential
 from gpflow.likelihoods import Gaussian
 
 plt.rc('axes', titlesize=24)        # fontsize of the axes title
-plt.rc('axes', labelsize=18)        # fontsize of the x and y labels
-plt.rc('xtick', labelsize=12)       # fontsize of the tick labels
-plt.rc('ytick', labelsize=12)       # fontsize of the tick labels
-plt.rc('legend', fontsize=20)       # legend fontsize
+plt.rc('axes', labelsize=20)        # fontsize of the x and y labels
+plt.rc('xtick', labelsize=16)       # fontsize of the tick labels
+plt.rc('ytick', labelsize=16)       # fontsize of the tick labels
+plt.rc('legend', fontsize=22)       # legend fontsize
 plt.rc('figure', titlesize=32)      # fontsize of the figure title
+
+plt.rcParams.update({
+    "text.usetex": True,
+    "font.family": "serif",
+    "font.serif": ["Palatino"],
+})
 
 print('GPflow version    ', gpf.__version__)
 print('BNQD version      ', BNQD.__version__)
@@ -174,7 +180,7 @@ K = len(kernel_list)
 
 cmap = cm.viridis
 
-fig, axes = plt.subplots(nrows=K, ncols=2, figsize=(24, 12 * K))
+fig, axes = plt.subplots(nrows=K, ncols=2, figsize=(20, 10 * K))
 
 for i, kernel in enumerate(kernel_list):
     ax = axes[i, 0]
@@ -200,7 +206,7 @@ axes[0, 0].set_title('Continuous', fontsize=36)
 axes[0, 1].set_title('Discontinuous', fontsize=36)
 
 # plot the observations and the actual border
-ms = 160
+ms = 180
 for ax in fig.axes:
     pts = ax.scatter(x[:, 0], x[:, 1], s=ms, marker='o',
                      c=y, edgecolors='k', cmap=cmap,
@@ -221,7 +227,7 @@ xrange = np.arange(0, 100)
 pred_pre = geordd.predict_y(x_scaled_b + 1e-6)
 pred_post = geordd.predict_y(x_scaled_b - 1e-6)
 
-fig = plt.figure(figsize=(15, 8))
+fig = plt.figure(figsize=(12, 8))
 ax = plt.gca()
 
 colors = cm.magma(np.linspace(0.5, 0.1, num=K))

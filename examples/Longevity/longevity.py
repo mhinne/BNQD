@@ -12,11 +12,17 @@ from gpflow.kernels import Polynomial, Exponential, Matern32, SquaredExponential
 from utilities import plot_m0, plot_m1
 
 plt.rc('axes', titlesize=24)        # fontsize of the axes title
-plt.rc('axes', labelsize=18)        # fontsize of the x and y labels
-plt.rc('xtick', labelsize=12)       # fontsize of the tick labels
-plt.rc('ytick', labelsize=12)       # fontsize of the tick labels
+plt.rc('axes', labelsize=20)        # fontsize of the x and y labels
+plt.rc('xtick', labelsize=14)       # fontsize of the tick labels
+plt.rc('ytick', labelsize=14)       # fontsize of the tick labels
 plt.rc('legend', fontsize=20)       # legend fontsize
 plt.rc('figure', titlesize=32)      # fontsize of the figure title
+
+plt.rcParams.update({
+    "text.usetex": True,
+    "font.family": "serif",
+    "font.serif": ["Palatino"],
+})
 
 print('GPflow version    ', gpf.__version__)
 print('BNQD version      ', BNQD.__version__)
@@ -161,7 +167,7 @@ plot_m1(bndd, kernel=2, pred_range=(-10, 10), ax=axes[0], plot_opts={'color': 'i
                                                                      'label': '$\mathcal{M}_1$'})
 axes[0].set_title('Matérn ($\\nu=3/2$)', fontsize=24)
 axes[0].set_ylabel('Years alive post election', fontsize=22)
-axes[0].legend(fancybox=False, framealpha=0.95, ncol=2, loc='lower center')
+axes[0].legend(fancybox=False, framealpha=1.0, ncol=2, loc='lower center')
 abline(axes[1], a=a_opt, b=b_opt, d=d_opt, lw=4)
 axes[1].axvspan(xmin=cut_point-bw, xmax=cut_point+bw, color='lightgrey', alpha=0.6)
 axes[1].set_title('Linear RD with opt. bw. = {:0.2f}'.format(bw), fontsize=24)

@@ -33,6 +33,7 @@ def quadratic_regression(x, b0, b1, b2, x0=0.0, d=0):
 
 
 obs_model = 'g'
+save_plot = False
 
 print('1D case')
 # kernel_list = [Linear(), Exponential(), SquaredExponential(), SpectralMixture(Q=2)]
@@ -143,7 +144,8 @@ axes[0, 1].set_title('Discontinuous')
 
 plt.tight_layout()
 
-plt.savefig(r'D:\SURFdrive\Teaching\Courses\2021-2022\AI for Healthcare\demo2.pdf',
-            bbox_inches='tight', pad_inches=0)
+if save_plot:
+    plt.savefig(r'D:\SURFdrive\Teaching\Courses\2021-2022\AI for Healthcare\demo2.pdf',
+                bbox_inches='tight', pad_inches=0)
 
 plt.show()

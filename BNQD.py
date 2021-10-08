@@ -342,7 +342,7 @@ class BNQD():
         if hasattr(self, '__model_posterior'):
             return self.__model_posterior
         else:
-            return self.__model_posterior()
+            return self.__get_model_posterior()
 
     #
     def conditional_bma_effectsize(self):
