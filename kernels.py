@@ -153,7 +153,7 @@ def SpectralMixture(Q, mixture_weights=None, frequencies=None, lengthscales=None
     return Sum(components, name='Spectral_mixture')  # if len(components) > 1 else components[0]
 
 
-def initialize_from_emp_spec(Q, x, y, fs, plot=False):
+def initialize_from_emp_spec(Q, x, y, fs, plot=True):
     """
     Initializes the Spectral Mixture hyperparameters by fitting a GMM on the empirical spectrum,
     found by Lomb-Scargle periodogram.
