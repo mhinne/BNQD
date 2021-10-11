@@ -119,7 +119,6 @@ class DiscontinuousModel:
         return -1.0 * self.log_marginal_likelihood()
 
     #
-    # todo: update these functions to work with new kernel formulation
     def predict_y(self, x_new, full_cov=False, full_output_cov=False):
         return self.gpmodel.predict_y(x_new,
                                       full_cov=full_cov,
@@ -132,4 +131,32 @@ class DiscontinuousModel:
                                       full_output_cov=full_output_cov)
 
     #
+    def counterfactual_y(self, x_new, full_cov=False, full_output_cov=False):
+        """
+        Predicts the counterfactual response for x >= x0, based on the GP trained for x < x0.
+
+        @param x_new: New input locations
+        @param full_cov:
+        @param full_output_cov:
+        @return: Returns extrapolations/predictions for x >= x0
+        """
+
+        assert min(x_new) >= self.x0, 'Counterfactual predictions can only follow the intervention.'
+
+        # pre-intervention kernel:
+        k_A = self.gpmodel.kernel.kernels[0]
+        if isinstance(self.likelihood, Gaussian) and not isinstance(k_A, MultiOutputKernel):
+            counterfactual_gp = GPR(data=self.gpmodel.data,
+                                    kernel=k_A,
+                                    mean_function=self.gpmodel.mean_function,
+                                    noise_variance=self.gpmodel.likelihood.variance)
+        else:
+            counterfactual_gp = VGP(data=self.gpmodel.data,
+                                    kernel=k_A,
+                                    likelihood=self.gpmodel.likelihood,
+                                    mean_function=self.gpmodel.mean_function)
+
+        return counterfactual_gp.predict_y(x_new, full_cov=full_cov, full_output_cov=full_output_cov)
+
+
 #

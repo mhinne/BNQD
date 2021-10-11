@@ -45,6 +45,7 @@ class BNQD():
         self.results = None
         self.mogp = False
         self.migp = False
+        self.qed_mode = qed_mode
 
         if type(data) is tuple:
             X, Y = data
@@ -162,6 +163,28 @@ class BNQD():
             predictions_k = ((mu0_k, var0_k), (mu1_k, var1_k))
             predictions.append(predictions_k)
         return predictions
+
+    #
+    def counterfactual_y(self, x_new):
+        """
+
+        @param x_new: Locations of new observations x >= x0.
+        @return: Extrapolated responses trained on x < x0, for all kernels, for the alternative model M1.
+        """
+        assert self.qed_mode == 'ITS', 'Counterfactual extrapolations are only meaningful for ITS design.'
+
+        if self.mogp:
+            raise NotImplementedError
+
+        if np.ndim(x_new) < 2:
+            x_new = np.atleast_2d(x_new).T
+
+        cf = list()
+        for k in range(len(self.kernels)):
+            mu1_k, var1_k = self.M1[k].counterfactual_y(x_new)
+            cf.append((mu1_k, var1_k))
+
+        return cf
 
     #
     def __get_evidence(self, mode='BIC'):

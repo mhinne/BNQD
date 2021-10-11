@@ -1,16 +1,6 @@
 import numpy as np
-from tqdm import tqdm
 import matplotlib.pyplot as plt
-# import os
-# import gpflow as gpf
-# from rdd import rdd
-# import pandas as pd
-# import scipy.stats as stats
 
-from matplotlib import cm
-from BNQD import BNQD
-# from gpflow.kernels import Polynomial, Exponential, Matern32, SquaredExponential
-# from gpflow.likelihoods import Gaussian
 
 plt.rc('axes', titlesize=26)  # fontsize of the axes title
 plt.rc('axes', labelsize=20)  # fontsize of the x and y labels
@@ -25,8 +15,6 @@ plt.rcParams.update({
     "font.serif": ["Palatino"],
 })
 
-# print('GPflow version    ', gpf.__version__)
-print('BNQD version      ', BNQD.__version__)
 
 
 def plot_mixture_component(x, y, col, ax=None):
