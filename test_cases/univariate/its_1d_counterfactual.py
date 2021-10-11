@@ -85,6 +85,8 @@ qed.train()
 (m0_mu, m0_var), (m1_mu, m1_var) = qed.predict_y(xf)[0]
 
 m1_A_mu, m1_A_var = qed.counterfactual_y(xf[xf >= x0])[0]
+num_samples = 10
+m1_A_samples = qed.counterfactual_f_samples(xf[xf >= x0], num_samples=num_samples)[0]
 
 
 plt.figure(figsize=(12, 6))
@@ -92,6 +94,9 @@ ax = plt.gca()
 plot_fit(xf, m0_mu, m0_var, color='g', label='m0', ax=ax)
 plot_fit(xf, m1_mu, m1_var, color='r', label='m1', ax=ax)
 plot_fit(xf[xf >= x0], m1_A_mu, m1_A_var, color='b', label='m1_A', ax=ax)
+for i in range(num_samples):
+    ax.plot(xf[xf >= x0], m1_A_samples[i, :, 0].numpy().flatten(), color='b', lw=0.5, ls=':')
+
 ax.plot(xf, f, c='k', label='True signal')
 ax.scatter(x, y, c='k', label='Obs')
 ax.set_xlim([-np.pi, np.pi])

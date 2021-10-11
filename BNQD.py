@@ -187,6 +187,29 @@ class BNQD():
         return cf
 
     #
+    def counterfactual_f_samples(self, x_new, num_samples):
+        """
+
+        @param x_new: Locations of new observations x >= x0.
+        @return: Samples of the counterfactual GP, trained on x<x0, evaluated on x>=x0.
+        """
+        assert self.qed_mode == 'ITS', 'Counterfactual extrapolations are only meaningful for ITS design.'
+
+        if self.mogp:
+            raise NotImplementedError
+
+        if np.ndim(x_new) < 2:
+            x_new = np.atleast_2d(x_new).T
+
+        cf_samples = list()
+        for k in range(len(self.kernels)):
+            samples = self.M1[k].counterfactual_f_samples(x_new, num_samples=num_samples)
+            cf_samples.append(samples)
+
+        return cf_samples
+
+
+    #
     def __get_evidence(self, mode='BIC'):
         """
 
