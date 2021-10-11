@@ -33,13 +33,22 @@ class DynamicalSystemDiscontinuity():
             Y[t + 1,:] = Y[t,:] + h * (k1 + 2*k2 + 2*k3 + k4) / 6
         return Y
 
-    def get_random_samples(self, Y, N, sigma_x, x_start, x_end):
+    def get_random_samples(self, Y, N, x_start, x_end, h):
         """
-        Get samples from the system at random input locations
+        Get samples from the system at random input locations.
+        For now assumes the same input locations on all dimensions
         @param N (int) number of samples to draw from
         @return:
         """
-        X = np.random.normal()
+        idx = np.arange(Y.shape[0])
+        sample_idx = np.sort(np.random.choice(idx, N))
+
+        # Get sampled irregular time indexes
+        Y = Y[sample_idx,:]
+        X = np.zeros((Y.shape))
+        for i in range(Y.shape[1]):
+            X[:,i] = sample_idx * h
+        return X, Y
 
     def f(self, t, Y, h):
         """
