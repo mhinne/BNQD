@@ -190,6 +190,7 @@ class BNQD():
     def counterfactual_f_samples(self, x_new, num_samples):
         """
 
+        @param num_samples:
         @param x_new: Locations of new observations x >= x0.
         @return: Samples of the counterfactual GP, trained on x<x0, evaluated on x>=x0.
         """
@@ -204,7 +205,7 @@ class BNQD():
         cf_samples = list()
         for k in range(len(self.kernels)):
             samples = self.M1[k].counterfactual_f_samples(x_new, num_samples=num_samples)
-            cf_samples.append(samples)
+            cf_samples += [samples]
 
         return cf_samples
 

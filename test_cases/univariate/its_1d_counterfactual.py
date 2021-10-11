@@ -37,13 +37,14 @@ print('BNQD version      ', BNQD.__version__)
 
 
 def signal(x, x0=0):
-    return (x <= x0)*(np.sin(4*x) + np.cos(3*x)) + (x>x0)*(np.sin(12*x) + np.cos(3*x))
+    return 2*((x <= x0)*(np.sin(4*x) + np.cos(3*x)) + (x>x0)*(np.sin(12*x) + np.cos(3*x)))
 
 
 def plot_fit(x, mean, var, color, label, ax=None):
     if ax is None:
         ax = plt.gca()
 
+    x = x.flatten()
     mean = mean.numpy().flatten()
     intv = 1.96*np.sqrt(var.numpy().flatten())
     ax.plot(x, mean, c=color, label=label)
@@ -55,7 +56,7 @@ def plot_fit(x, mean, var, color, label, ax=None):
 
 x0 = 0
 n, nf = 50, 200
-sigma = 0.2
+sigma = 0.8
 xf = np.linspace(-np.pi, np.pi, num=nf)
 x = np.linspace(-np.pi, np.pi, num=n)
 f = signal(xf, x0=0)
@@ -73,8 +74,8 @@ ax.legend()
 plt.show()
 
 likelihood = Gaussian()
-# kernel_list = [SpectralMixture(Q=2)]
-kernel_list = [SquaredExponential()]
+kernel_list = [SpectralMixture(Q=2)]
+# kernel_list = [SquaredExponential()]
 
 qed = BNQD(data=(x, y),
            likelihood=likelihood,
@@ -83,28 +84,30 @@ qed = BNQD(data=(x, y),
            qed_mode='ITS')
 qed.train()
 
+x_new = np.atleast_2d(xf[xf >= x0]).T
+
 (m0_mu, m0_var), (m1_mu, m1_var) = qed.predict_y(xf)[0]
 
-m1_A_mu, m1_A_var = qed.counterfactual_y(xf[xf >= x0])[0]
-num_samples = 5
-m1_A_samples = qed.counterfactual_f_samples(xf[xf >= x0], num_samples=num_samples)[0]
+num_samples = 10
+m1_A_mu, m1_A_var = qed.counterfactual_y(x_new)[0]
+m1_A_samples = qed.counterfactual_f_samples(x_new, num_samples=num_samples)[0]
 
 
 plt.figure(figsize=(12, 6))
 ax = plt.gca()
 plot_fit(xf, m0_mu, m0_var, color='g', label='m0', ax=ax)
 plot_fit(xf, m1_mu, m1_var, color='r', label='m1', ax=ax)
-plot_fit(xf[xf >= x0], m1_A_mu, m1_A_var, color='b', label='m1_A', ax=ax)
-for i in range(num_samples):
-    ax.plot(xf[xf >= x0], m1_A_samples[i, :, 0].numpy().flatten(), color='b', lw=0.5, ls=':')
-
+plot_fit(x_new, m1_A_mu, m1_A_var, color='C1', label='m1_A', ax=ax)
+ax.plot(x_new, m1_A_samples[:, :, 0].numpy().T, color='C1', lw=1, ls=':')
+# why do these work but not the former???
+# ax.plot(x_new, moresamples[:, :, 0].numpy().T, color='C1', ls=':')
 ax.plot(xf, f, c='k', label='True signal')
 ax.scatter(x, y, c='k', label='Obs')
 ax.set_xlim([-np.pi, np.pi])
 ax.axvline(x=x0, c='k', ls='--')
 ax.set_xlabel('x')
 ax.set_ylabel('y')
-ax.legend()
+ax.legend(fontsize=14)
 plt.show()
 
 

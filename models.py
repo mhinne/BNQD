@@ -79,6 +79,7 @@ class DiscontinuousModel:
         self.forcing_variable = forcing_variable
         self.likelihood = likelihood
         self.split_function = split_function
+        self.data = data
 
         if separate_kernels:
             kernels = [kernel, deepcopy(kernel)]
@@ -102,9 +103,9 @@ class DiscontinuousModel:
 
 
         if isinstance(self.likelihood, Gaussian) and not isinstance(kernel, MultiOutputKernel):
-            self.gpmodel = GPR(data=data, kernel=kernel, mean_function=mean_function)
+            self.gpmodel = GPR(data=self.data, kernel=kernel, mean_function=mean_function)
         else:
-            self.gpmodel = VGP(data=data, kernel=kernel, likelihood=likelihood, mean_function=mean_function)
+            self.gpmodel = VGP(data=self.data, kernel=kernel, likelihood=likelihood, mean_function=mean_function)
         self.title = 'Discontinuous model'
 
     #
@@ -138,11 +139,9 @@ class DiscontinuousModel:
         @return:
         """
         # pre-intervention kernel:
-        (X, Y) = self.gpmodel.data
-        X = X.numpy()
-        Y = Y.numpy()
-        A_ix = X[:, 0] < self.x0
-        data_A = (X[A_ix, :], Y[A_ix, :])
+        (X, Y) = self.data
+        ix_A = X[:, 0] < self.x0
+        data_A = (X[ix_A, :], Y[ix_A, :])
 
         k_A = self.gpmodel.kernel.kernels[0]
         if isinstance(self.likelihood, Gaussian) and not isinstance(k_A, MultiOutputKernel):
@@ -157,6 +156,11 @@ class DiscontinuousModel:
                                     mean_function=self.gpmodel.mean_function)
         return counterfactual_gp
 
+    #
+    def counterfactual_model(self):
+        return self.__counterfactual_model()
+
+    #
 
     def counterfactual_y(self, x_new, full_cov=False, full_output_cov=False):
         """
@@ -169,28 +173,22 @@ class DiscontinuousModel:
         """
 
         assert min(x_new) >= self.x0, 'Counterfactual predictions can only follow the intervention.'
-
         cf_gp = self.__counterfactual_model()
-
-        print_summary(cf_gp)
-        print_summary(self.gpmodel)
-
         return cf_gp.predict_y(x_new, full_cov=full_cov, full_output_cov=full_output_cov)
 
     #
-    def counterfactual_f_samples(self, x_new, num_samples, full_cov=False, full_output_cov=False):
+    def counterfactual_f_samples(self, x_new, num_samples, full_cov=True, full_output_cov=False):
         """
         Samples the counterfactual response for x >= x0, based on the GP trained for x < x0.
 
         @param x_new: New input locations
+        @param num_samples: Number of samples to draw from the GP.
         @param full_cov:
         @param full_output_cov:
         @return: Returns samples of extrapolations/predictions for x >= x0
         """
         assert min(x_new) >= self.x0, 'Counterfactual predictions can only follow the intervention.'
-
         cf_gp = self.__counterfactual_model()
-
         return cf_gp.predict_f_samples(x_new,
                                        num_samples=num_samples,
                                        full_cov=full_cov,
