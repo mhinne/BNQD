@@ -2,7 +2,7 @@ from gpflow.likelihoods import Likelihood, Gaussian
 from gpflow.kernels import Kernel
 from gpflow.mean_functions import MeanFunction
 from gpflow.models import GPModel, GPR, VGP
-from gpflow.utilities import triangular, deepcopy
+from gpflow.utilities import triangular, deepcopy, print_summary
 
 from kernels import IndependentKernel, MultiOutputKernel
 
@@ -138,14 +138,20 @@ class DiscontinuousModel:
         @return:
         """
         # pre-intervention kernel:
+        (X, Y) = self.gpmodel.data
+        X = X.numpy()
+        Y = Y.numpy()
+        A_ix = X[:, 0] < self.x0
+        data_A = (X[A_ix, :], Y[A_ix, :])
+
         k_A = self.gpmodel.kernel.kernels[0]
         if isinstance(self.likelihood, Gaussian) and not isinstance(k_A, MultiOutputKernel):
-            counterfactual_gp = GPR(data=self.gpmodel.data,
+            counterfactual_gp = GPR(data=data_A,
                                     kernel=k_A,
                                     mean_function=self.gpmodel.mean_function,
                                     noise_variance=self.gpmodel.likelihood.variance)
         else:
-            counterfactual_gp = VGP(data=self.gpmodel.data,
+            counterfactual_gp = VGP(data=data_A,
                                     kernel=k_A,
                                     likelihood=self.gpmodel.likelihood,
                                     mean_function=self.gpmodel.mean_function)
@@ -165,6 +171,9 @@ class DiscontinuousModel:
         assert min(x_new) >= self.x0, 'Counterfactual predictions can only follow the intervention.'
 
         cf_gp = self.__counterfactual_model()
+
+        print_summary(cf_gp)
+        print_summary(self.gpmodel)
 
         return cf_gp.predict_y(x_new, full_cov=full_cov, full_output_cov=full_output_cov)
 

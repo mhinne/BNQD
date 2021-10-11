@@ -54,8 +54,8 @@ def plot_fit(x, mean, var, color, label, ax=None):
 
 
 x0 = 0
-n, nf = 80, 200
-sigma = 0.3
+n, nf = 50, 200
+sigma = 0.2
 xf = np.linspace(-np.pi, np.pi, num=nf)
 x = np.linspace(-np.pi, np.pi, num=n)
 f = signal(xf, x0=0)
@@ -73,7 +73,8 @@ ax.legend()
 plt.show()
 
 likelihood = Gaussian()
-kernel_list = [SpectralMixture(Q=3)]
+# kernel_list = [SpectralMixture(Q=2)]
+kernel_list = [SquaredExponential()]
 
 qed = BNQD(data=(x, y),
            likelihood=likelihood,
@@ -85,7 +86,7 @@ qed.train()
 (m0_mu, m0_var), (m1_mu, m1_var) = qed.predict_y(xf)[0]
 
 m1_A_mu, m1_A_var = qed.counterfactual_y(xf[xf >= x0])[0]
-num_samples = 10
+num_samples = 5
 m1_A_samples = qed.counterfactual_f_samples(xf[xf >= x0], num_samples=num_samples)[0]
 
 
