@@ -99,8 +99,6 @@ plot_fit(xf, m0_mu, m0_var, color='g', label='m0', ax=ax)
 plot_fit(xf, m1_mu, m1_var, color='r', label='m1', ax=ax)
 plot_fit(x_new, m1_A_mu, m1_A_var, color='C1', label='m1_A', ax=ax)
 ax.plot(x_new, m1_A_samples[:, :, 0].numpy().T, color='C1', lw=1, ls=':')
-# why do these work but not the former???
-# ax.plot(x_new, moresamples[:, :, 0].numpy().T, color='C1', ls=':')
 ax.plot(xf, f, c='k', label='True signal')
 ax.scatter(x, y, c='k', label='Obs')
 ax.set_xlim([-np.pi, np.pi])
