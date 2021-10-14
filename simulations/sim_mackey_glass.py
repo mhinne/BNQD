@@ -32,30 +32,28 @@ print('BNQD version      ', BNQD.__version__)
 a = 0.2
 b = 0.1
 tau = 17
-tau_disc = 20
+tau_disc = 17
 n_power = 10
-init_pos = [0]
+init_pos = [1.15]
 
 # Integration and discontinuity parameters
-x_start, x_end = 0, 25
-x0 = 10.
-h = 1e-5
-x_start_sample, x_end_sample = 5, 25
+x_start, x_end = 0, 600
+x0 = 300.
+h = 1e-3
+x_start_sample, x_end_sample = 200, 600
 N_samples = 200
 
 # Simulate and visualize system
 mackey_glass = MackeyGlass(a, b, tau, n_power, x0, tau_disc=20)
 timeseries = mackey_glass.simulate_rk45(init_pos=init_pos, x_start=x_start, x_end=x_end, h=h)
 X, Y = mackey_glass.get_random_samples(Y=timeseries, N=N_samples, x_start=x_start_sample, x_end=x_end_sample, h=h)
-mackey_glass.plot_timeseries(X, Y, x0)
-plt.show()
-
+print(X.shape, Y.shape)
 fig, ax = mackey_glass.plot_timeseries(np.arange(x_start, x_end, h), timeseries, x0, X, Y)
-fig.suptitle(f"Mackay-Glass with tau discontinuity: {tau} to {tau_disc} at $x_0$={x0}")
+fig.suptitle(f"Mackey-Glass with tau discontinuity: {tau} to {tau_disc} at $x_0$={x0}")
 plt.show()
 
 ## Run BND design
-sm = SpectralMixture(Q=2, x=X, y=Y)
+sm = SpectralMixture(Q=4, x=X, y=Y)
 kernels = [sm]
 Y = (Y - np.mean(Y))/np.std(Y)
 bndd = BNQD((X, Y),
@@ -66,7 +64,6 @@ bndd = BNQD((X, Y),
 bndd.train()
 res_df = bndd.get_results()
 print(res_df)
-
 
 x_end = x_end + 20
 n_samples = int((x_end-x_start)/h)

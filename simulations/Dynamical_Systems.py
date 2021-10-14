@@ -114,16 +114,44 @@ class MackeyGlass(DynamicalSystemDiscontinuity):
         self.x0 = x0
         self.tau_disc = tau_disc
 
-    def f(self, t, Y, h):
+    def f(self, t, Y, Y_delay, h):
         """
         Mackey-glass transition functio
         @param t: time index
         @param Y: array of all simulated values so far
         @return:
         """
-        tau = self.tau if t<self.x0/h else self.tau_disc
-        if t>tau:
-            y_delay = Y[t-self.tau]
-        else:
-            y_delay = 0
-        return (self.a*y_delay)/(1+y_delay**self.n_power) - self.b*Y
+        return self.a*Y_delay/(1+Y_delay**self.n_power) - self.b*Y
+
+    def simulate_rk45(self, init_pos, x_start, x_end, h=1e-5):
+        """
+        Simulate system with Runge Kutta 4-5 from x_start to x_end
+        with step size h with a discontinutiy at timepoint.
+
+        @param init_pos (array) initial conditions of system
+        @param x_start (float) start point of simulation
+        @param x_end (float) ending point of simulation
+        @param h (float) size of the timesteps
+
+        @return: Y (array) simulated timeseries of length N
+        """
+        N = int((x_end - x_start) / h)
+        Y = np.zeros((N, self.D))
+        Y[0, :] = init_pos
+
+        for t in range(N - 1):
+            if t%100:
+                print(t,'/',N-1)
+            tau = self.tau if t < self.x0 / h else self.tau_disc
+            tau_scaled = int(tau/h)
+            if t > tau:
+                Y_delay = Y[t - tau_scaled]
+            else:
+                Y_delay = 0
+
+            k1 = self.f(t, Y[t,:], Y_delay, h)
+            k2 = self.f(t + h / 2, Y[t,:] + h / 2 * k1, Y_delay + h/2, h)
+            k3 = self.f(t + h / 2, Y[t,:] + h / 2 * k2, Y_delay + h/2, h)
+            k4 = self.f(t + h, Y[t,:] + h * k3, Y_delay+h*k3, h)
+            Y[t + 1, :] = Y[t,:] + h * (k1 + 2 * k2 + 2 * k3 + k4) / 6
+        return Y
