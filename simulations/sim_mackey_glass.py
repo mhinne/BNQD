@@ -34,12 +34,12 @@ b = 0.1
 tau = 12
 tau_disc = 17
 n_power = 10
-init_pos = [1.15]
+init_pos = [1.]
 
 # Integration and discontinuity parameters
-x_start, x_end = 0, 600
-x0 = 300.
-h = 1e-3
+x_start, x_end = 0, 400
+x0 = 200.
+h = 1e-2
 N_samples = 150
 
 # Simulate and visualize system
@@ -64,26 +64,25 @@ bndd.train()
 res_df = bndd.get_results()
 print(res_df)
 
-x_end = x_end + 20
+x_end = x_end + 200
 n_samples = int((x_end-x_start)/h)
 X_pred = np.arange(x_start, x_end, step=h)
 y_pred = bndd.predict_y(X_pred)
 
-# y_counterfactual = bndd.co
-plt.plot(y_counterfactual)
-plt.show()
+# plt.plot(y_counterfactual)
+# plt.show()
 
 ((mu0_k, var0_k), (mu1_k, var1_k)) = y_pred[0]
 
 fig, ax = plt.subplots(2,1,figsize=(12,8))
 ax[0].scatter(X, Y, marker='x', color='black')
 ax[0].plot(X_pred, mu0_k)
-ax[0].fill_between(X_pred, mu0_k - 1.96 * var0_k, mu0_k + 1.96 * var0_k, alpha=0.2)
+ax[0].fill_between(X_pred, mu0_k[:,0] - 1.96 * var0_k[:,0], mu0_k[:,0] + 1.96 * var0_k[:,0], alpha=0.2)
 ax[0].set_title(f'Model 0')
 
 ax[1].scatter(X, Y, marker='x', color='black')
 ax[1].plot(X_pred, mu1_k)
-ax[1].fill_between(X_pred, mu1_k - 1.96 * var1_k, mu1_k + 1.96 * var1_k,alpha=0.2)
+ax[1].fill_between(X_pred, mu1_k[:,0] - 1.96 * var1_k[:,0], mu1_k[:,0] + 1.96 * var1_k[:,0],alpha=0.2)
 ax[1].set_title(f'Model 1')
 plt.show()
 
