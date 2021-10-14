@@ -56,18 +56,21 @@ class DynamicalSystemDiscontinuity():
         """
         pass
 
-    def plot_timeseries(self, X, Y, x0):
+    def plot_timeseries(self, X_time_series, time_series, x0, X, Y):
         """
         Plot time series of dynamical system
         @param X (array of [N,D]) input locations
         @param Y (array of [N,D]) time series
         @param x0 (float) discontinuity location
+        @param X ()
+        @param Y ()
         """
         N, D = Y.shape
+
         fig, ax = plt.subplots(1, 1, figsize=(12,6))
         for i in range(D):
-            ax.plot(X[:,i], Y[:,i])
-            #ax.scatter(X[:,i], Y[:,i], color='black', marker='x')
+            ax.plot(X_time_series, time_series[:,i])
+            ax.scatter(X[:,i], Y[:,i], color='black', marker='x')
         ax.axvline(x0, linestyle='-', color='gray', label='Intervention threshold')
         ax.set_xlim((X[0,0], X[-1,0]))
         ax.legend()
@@ -111,13 +114,16 @@ class MackeyGlass(DynamicalSystemDiscontinuity):
         self.x0 = x0
         self.tau_disc = tau_disc
 
-    def f(self, t, Y):
+    def f(self, t, Y, h):
         """
         Mackey-glass transition functio
         @param t: time index
         @param Y: array of all simulated values so far
         @return:
         """
-        y_delay = Y[t-self.tau]
-        # for the first tau steps, this will be 0 (assuming the simulation length is longer than 17)
-        return (self.a*y_delay)/(1+y_delay**self.n_power) - self.b*Y[t]
+        tau = self.tau if t<self.x0/h else self.tau_disc
+        if t>tau:
+            y_delay = Y[t-self.tau]
+        else:
+            y_delay = 0
+        return (self.a*y_delay)/(1+y_delay**self.n_power) - self.b*Y

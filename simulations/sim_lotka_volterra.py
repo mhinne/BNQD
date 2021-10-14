@@ -47,12 +47,12 @@ lotka_volterra = LotkaVolterra(alpha, beta, delta, gamma, x0, alpha_disc)
 time_series = lotka_volterra.simulate_rk45(init_pos=init_pos, x_start=x_start, x_end=x_end, h=h)
 X, Y = lotka_volterra.get_random_samples(Y=time_series, N=N_samples, x_start=x_start, x_end=x_end, h=h)
 
-fig, ax = lotka_volterra.plot_timeseries(X, Y, x0)
+fig, ax = lotka_volterra.plot_timeseries(np.arange(x_start, x_end, h), time_series, x0, X, Y)
 fig.suptitle(f"Lotka volterra with alpha discontinuity: {alpha} to {alpha_disc} at $x_0$={x0}")
 plt.show()
 
 ## Run BND design
-sm = SpectralMixture(Q=2, x=X[:,0], y=Y[:,0])
+sm = SpectralMixture(Q=2, x=X[:,1], y=Y[:,1])
 print(sm.trainable_parameters)
 kernels = [sm]
 Y = (Y - np.mean(Y))/np.std(Y)
@@ -66,7 +66,7 @@ res_df = bndd.get_results()
 print(res_df)
 
 
-x_end = x_end + 100
+x_end = x_end + 20
 n_samples = int((x_end-x_start)/h)
 X_pred = np.zeros((n_samples, 2))
 for i in range(2):
