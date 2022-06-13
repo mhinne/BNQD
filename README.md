@@ -13,7 +13,8 @@ The current implementation of BNQD was tested using the following dependencies:
 
 ## Literature
 
-* Max Hinne, Marcel van Gerven and Luca Ambrogioni, 2020. Causal inference using Bayesian non-parametric quasi-experimental design. ArXiv: https://arxiv.org/abs/1911.06722.
+* Max Hinne, David Leeftink, Marcel van Gerven and Luca Ambrogioni, 2022. Bayesian model averaging for nonparametric discontinuity
+design. PLoS ONE, in press.
 * David Leeftink and Max Hinne, 2020. Spectral discontinuity design: Interrupted time series with spectral mixture kernels. Proceedings of the Machine Learning for Health NeurIPS Workshop, in PMLR 136:213-225. Available from http://proceedings.mlr.press/v136/leeftink20a.html.
 
 
